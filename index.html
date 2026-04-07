@@ -440,6 +440,22 @@
 </head>
 <body>
 
+<!-- ── Login Gate ── -->
+<div id="login-gate" style="display:none;position:fixed;inset:0;background:#0a0a0a;z-index:99999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#141414;border:1px solid #2a2a2a;border-radius:16px;padding:40px 36px;width:320px;text-align:center;">
+    <div style="font-size:32px;margin-bottom:8px;">🐱</div>
+    <div style="font-size:18px;font-weight:600;color:#e5e5e5;margin-bottom:4px;">Chia LLM</div>
+    <div style="font-size:12px;color:#666;margin-bottom:28px;">Sign in to continue</div>
+    <input id="lg-user" type="text" placeholder="Username" autocomplete="username"
+      style="width:100%;padding:10px 14px;background:#1e1e1e;border:1px solid #3a3a3a;color:#e5e5e5;border-radius:8px;font-size:14px;margin-bottom:10px;box-sizing:border-box;outline:none;" />
+    <input id="lg-pass" type="password" placeholder="Password" autocomplete="current-password"
+      style="width:100%;padding:10px 14px;background:#1e1e1e;border:1px solid #3a3a3a;color:#e5e5e5;border-radius:8px;font-size:14px;margin-bottom:16px;box-sizing:border-box;outline:none;" />
+    <div id="lg-err" style="color:#f87171;font-size:12px;margin-bottom:10px;min-height:16px;"></div>
+    <button onclick="doLogin()"
+      style="width:100%;padding:11px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Sign In</button>
+  </div>
+</div>
+
 <!-- History overlay + panel -->
 <div id="history-panel">
   <div id="history-header">
@@ -1969,6 +1985,28 @@ async function sendMessage() {
   }
 
   _resetSendBtn();
+}
+
+// ── Login Gate ──
+(function() {
+  const AUTH_KEY = 'chia_auth';
+  const gate = document.getElementById('login-gate');
+  if (sessionStorage.getItem(AUTH_KEY) === '1') { gate.style.display = 'none'; return; }
+  gate.style.display = 'flex';
+  document.getElementById('lg-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('lg-user').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('lg-pass').focus(); });
+})();
+
+function doLogin() {
+  const u = document.getElementById('lg-user').value.trim();
+  const p = document.getElementById('lg-pass').value;
+  if (u === 'vchia93' && p === '17J92a93') {
+    sessionStorage.setItem('chia_auth', '1');
+    document.getElementById('login-gate').style.display = 'none';
+  } else {
+    document.getElementById('lg-err').textContent = 'Incorrect username or password.';
+    document.getElementById('lg-pass').value = '';
+  }
 }
 </script>
 </body>
