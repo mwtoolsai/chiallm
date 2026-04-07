@@ -1255,8 +1255,9 @@ async function _continueResponse(bub, originalContent, metaEl) {
     ];
     const contPayload = provider === 'moonshot'
       ? { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true,
-          temperature: 1.0, thinking: { type: 'enabled' } }  // thinking on — guide mode, no web search needed
-      : { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true, stream_options: { include_usage: true } };
+          temperature: 1.0, thinking: { type: 'enabled' } }
+      : { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true,
+          stream_options: { include_usage: true }, temperature: 0.7 };  // no web search tools in guide/continue mode
 
     const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(contPayload), signal: abortController?.signal });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
@@ -1670,13 +1671,17 @@ async function sendMessage() {
         'HTTP-Referer': 'https://chiallm.app',
         'X-Title': 'Chia LLM'
       };
+      // Only enable web search when no production guide is loaded.
+      // When guide is active, model must write — web search causes loops/500s on some models.
+      const orWebSearch = docText ? [] : [{ type: 'openrouter:web_search' }];
       payload = {
         model: selectedModel,
         messages: [{ role: 'system', content: sysPrompt }, ...messages],
         max_tokens: 32768,
         stream: true,
-        stream_options: { include_usage: true },  // get real token counts in stream
-        tools: [{ type: 'openrouter:web_search' }]
+        stream_options: { include_usage: true },
+        temperature: 0.7,
+        ...(orWebSearch.length ? { tools: orWebSearch } : {})
       };
     }
 
