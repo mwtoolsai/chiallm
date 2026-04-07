@@ -499,7 +499,6 @@
     </div>
     <button id="send-btn" onclick="sendMessage()">➤</button>
   </div>
-  <div class="hint" id="hint-text">Kimi K2.5 (web search) · Perplexity Sonar Pro · Load your production guide with 📄</div>
 </div>
 
 <script>
@@ -923,11 +922,20 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
   let tokenStr;
   if (hasUsage) {
     const cost = _calcCost(model, promptTokens, completionTokens);
-    const costStr = cost != null ? ` · ~$${cost < 0.0001 ? '<0.0001' : cost.toFixed(4)}` : ' · free';
+    const costStr = cost != null
+      ? (cost === 0 ? ' · free' : ` · ~$${cost < 0.0001 ? '<0.0001' : cost.toFixed(4)}`)
+      : ' · free';
     tokenStr = `↑${promptTokens.toLocaleString()} ↓${completionTokens.toLocaleString()} tokens${costStr}`;
   } else {
+    // Estimate: assume ~30% prompt overhead + guide, 70% output
     const est = Math.round((content || '').length / 4);
-    tokenStr = `~${est.toLocaleString()} tokens (est.)`;
+    const estPrompt = Math.round(est * 0.4);
+    const estCompl  = Math.round(est * 0.6);
+    const cost = _calcCost(model, estPrompt, estCompl);
+    const costStr = cost != null
+      ? (cost === 0 ? ' · free' : ` · ~$${cost < 0.0001 ? '<0.0001' : cost.toFixed(4)}`)
+      : '';
+    tokenStr = `~${est.toLocaleString()} tokens${costStr} (est.)`;
   }
 
   const isLong = content && content.length > 600;
@@ -1062,7 +1070,7 @@ async function sendMessage() {
       payload = {
         model: selectedModel,
         messages: [{ role: 'system', content: sysPrompt }, ...cleanMsgs],
-        max_tokens: 8192,
+        max_tokens: 32768,
         stream: true,
         thinking: { type: 'disabled' },   // kimi-k2.5 thinking mode is incompatible with $web_search
         tools: [{ type: 'builtin_function', function: { name: '$web_search' } }]
@@ -1078,15 +1086,17 @@ async function sendMessage() {
       payload = {
         model: selectedModel,
         messages: [{ role: 'system', content: sysPrompt }, ...messages],
-        max_tokens: 8192,
+        max_tokens: 32768,
         stream: true,
+        stream_options: { include_usage: true },  // get real token counts in stream
         tools: [{ type: 'openrouter:web_search' }]
       };
     }
 
     let full = '';
     let bubble = null;
-    let usageData = null;  // captured from final streaming chunk
+    let usageData = null;       // captured from final streaming chunk
+    let outerFinishReason = null; // 'stop' | 'length' — drives auto-continue
 
     if (provider === 'moonshot') {
       // Moonshot: multi-turn $web_search loop
@@ -1184,6 +1194,7 @@ async function sendMessage() {
           };
           // Continue loop to get the actual answer
         } else {
+          outerFinishReason = finishReason; // expose to auto-continue
           keepGoing = false;
         }
       }
@@ -1199,6 +1210,7 @@ async function sendMessage() {
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let orFinishReason = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -1214,6 +1226,7 @@ async function sendMessage() {
             if (parsed.usage) usageData = parsed.usage;  // capture token usage
             const choice = parsed.choices?.[0];
             if (!choice) continue;
+            if (choice.finish_reason && choice.finish_reason !== 'tool_calls') orFinishReason = choice.finish_reason;
             if (choice.delta?.tool_calls) {
               if (!bubble.textContent) bubble.textContent = '🔍 Searching the web…';
               continue;
@@ -1233,6 +1246,67 @@ async function sendMessage() {
           } catch {}
         }
       }
+      outerFinishReason = orFinishReason;
+    }
+
+    // ── Auto-continue: if model hit token limit, seamlessly fetch the rest ──
+    let contAttempts = 0;
+    while (outerFinishReason === 'length' && full.trim() && contAttempts < 6) {
+      contAttempts++;
+      bubble.textContent = full + '\n\n⏳ Continuing…';
+
+      // Build continuation payload — partial response + silent "continue" for context
+      const contMsgs = [
+        { role: 'system', content: sysPrompt },
+        ...messages,                              // includes original user prompt
+        { role: 'assistant', content: full },
+        { role: 'user', content: 'continue' }
+      ];
+      const contPayload = provider === 'moonshot'
+        ? { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true,
+            thinking: { type: 'disabled' }, tools: [{ type: 'builtin_function', function: { name: '$web_search' } }] }
+        : { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true,
+            stream_options: { include_usage: true }, tools: [{ type: 'openrouter:web_search' }] };
+
+      const contResp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(contPayload) });
+      if (!contResp.ok) break; // don't throw on continuation failure — keep what we have
+
+      const contReader = contResp.body.getReader();
+      const contDecoder = new TextDecoder();
+      let contBuf = '';
+      let contFinish = null;
+      let contDelta = '';
+
+      while (true) {
+        const { done, value } = await contReader.read();
+        if (done) break;
+        contBuf += contDecoder.decode(value, { stream: true });
+        const lines = contBuf.split('\n');
+        contBuf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const p = JSON.parse(raw);
+            if (p.usage) usageData = p.usage;
+            const ch = p.choices?.[0];
+            if (!ch) continue;
+            if (ch.finish_reason) contFinish = ch.finish_reason;
+            const d = ch.delta?.content || '';
+            if (d) {
+              contDelta += d;
+              bubble.textContent = full.replace(/\n\n⏳ Continuing…$/, '') + contDelta;
+              chatEl.scrollTop = chatEl.scrollHeight;
+            }
+          } catch {}
+        }
+      }
+
+      // Strip the indicator and append new content
+      full = full.replace(/\n\n⏳ Continuing…$/, '') + contDelta;
+      bubble.textContent = full;
+      outerFinishReason = contFinish;
     }
 
     // Only save real content — never save search indicator text as assistant message
