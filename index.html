@@ -1251,8 +1251,8 @@ async function _continueResponse(bub, originalContent, metaEl) {
       { role: 'user', content: 'continue\n\nReminder: scene type ratio MUST be ~35% IMAGE / ~45% VIDEO / ~20% TALKINGHEAD — do NOT default everything to IMAGE. IMAGE narration: 8-15 words avg ~12. VIDEO narration: max 20 words. TALKINGHEAD: max 20 words. Pick the right format for each scene based on the Format Decision Matrix in the production guide.' }
     ];
     const contPayload = provider === 'moonshot'
-      ? { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true, thinking: { type: 'disabled' },
-          tools: [{ type: 'builtin_function', function: { name: '$web_search' } }] }
+      ? { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true,
+          temperature: 1.0, thinking: { type: 'enabled' } }  // thinking on — guide mode, no web search needed
       : { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true, stream_options: { include_usage: true } };
 
     const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(contPayload), signal: abortController?.signal });
@@ -1646,12 +1646,17 @@ async function sendMessage() {
       // When a guide is active (Set C / script mode) the model must write from knowledge —
       // leaving the tool in causes an infinite search loop instead of writing.
       const moonshotTools = docText ? [] : [{ type: 'builtin_function', function: { name: '$web_search' } }];
+      // Enable thinking when production guide is loaded — guide mode needs careful instruction
+      // following (scene ratios, word limits) which thinking mode handles far better.
+      // Web search is already disabled in guide mode so there's no incompatibility.
+      const thinkingMode = docText ? { type: 'enabled' } : { type: 'disabled' };
       payload = {
         model: selectedModel,
         messages: [{ role: 'system', content: sysPrompt }, ...cleanMsgs],
         max_tokens: 32768,
         stream: true,
-        thinking: { type: 'disabled' },
+        temperature: docText ? 1.0 : 0.6,  // thinking needs temp=1.0, instant uses 0.6
+        thinking: thinkingMode,
         ...(moonshotTools.length ? { tools: moonshotTools } : {})
       };
     } else {
@@ -1732,9 +1737,14 @@ async function sendMessage() {
 
               if (choice.finish_reason) finishReason = choice.finish_reason;
 
+              // Show thinking indicator while reasoning tokens arrive (before content starts)
+              if (choice.delta?.thinking_content && full === '') {
+                if (!bubble.textContent || bubble.textContent === '🤔 Thinking…') bubble.textContent = '🤔 Thinking…';
+              }
+
               const delta = choice.delta?.content || '';
               if (delta) {
-                if (full === '' && bubble.textContent.startsWith('🔍')) _clearBubble(bubble);
+                if (full === '' && (bubble.textContent.startsWith('🔍') || bubble.textContent.startsWith('🤔'))) _clearBubble(bubble);
                 full += delta;
                 assistantContent += delta;
                 _appendDelta(bubble, delta);
