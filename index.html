@@ -602,7 +602,6 @@ function loadSavedDoc() {
 }
 
 loadSavedKey();
-renderHistoryPanel();
 loadSavedDoc();
 
 // ── Textarea auto-resize ──
@@ -627,6 +626,7 @@ function useChip(el) {
 const HISTORY_KEY = 'chia_history';
 const MAX_HISTORY = 50;
 let currentConvId = null;
+renderHistoryPanel(); // now safe — HISTORY_KEY is defined
 
 function _getHistory() {
   try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
@@ -927,14 +927,18 @@ async function sendMessage() {
 
   try {
     let apiUrl, headers, payload;
+
     if (provider === 'moonshot') {
       apiUrl = 'https://api.moonshot.ai/v1/chat/completions';
       headers = { 'Authorization': 'Bearer ' + activeKey, 'Content-Type': 'application/json' };
+      // Filter corrupt assistant messages (e.g. "🔍 Searching…" saved from broken prior attempts)
+      const cleanMsgs = messages.filter(m => !(m.role === 'assistant' && !m.content?.trim()));
       payload = {
         model: selectedModel,
-        messages: [{ role: 'system', content: sysPrompt }, ...messages],
+        messages: [{ role: 'system', content: sysPrompt }, ...cleanMsgs],
         max_tokens: 8192,
         stream: true,
+        thinking: { type: 'disabled' },   // kimi-k2.5 thinking mode is incompatible with $web_search
         tools: [{ type: 'builtin_function', function: { name: '$web_search' } }]
       };
     } else {
@@ -954,74 +958,173 @@ async function sendMessage() {
       };
     }
 
-    const resp = await fetch(apiUrl, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(payload),
-    });
-
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(`HTTP ${resp.status}: ${err}`);
-    }
-
-    removeTyping();
-    const bubble = addMessage('assistant', '');
     let full = '';
+    let bubble = null;
 
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete last line
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(data);
-          const choice = parsed.choices?.[0];
-          if (!choice) continue;
-          // Skip tool_call chunks (Moonshot web search in progress) — show searching indicator
-          if (choice.delta?.tool_calls) {
-            if (!bubble.textContent) bubble.textContent = '🔍 Searching the web…';
-            continue;
+    if (provider === 'moonshot') {
+      // Moonshot: multi-turn $web_search loop
+      // Per Moonshot docs: after finish_reason=tool_calls, echo arguments back as tool content
+      // Moonshot handles the actual search server-side (no client search needed)
+      let currentPayload = { ...payload };
+      let keepGoing = true;
+      let firstRequest = true;
+
+      while (keepGoing) {
+        const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(currentPayload) });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+
+        if (firstRequest) {
+          removeTyping();
+          bubble = addMessage('assistant', '');
+          firstRequest = false;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let toolCalls = [];
+        let assistantContent = '';
+        let finishReason = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const rawData = line.slice(6).trim();
+            if (rawData === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(rawData);
+              const choice = parsed.choices?.[0];
+              if (!choice) continue;
+
+              // Accumulate tool_call delta chunks
+              if (choice.delta?.tool_calls) {
+                if (!bubble.textContent) bubble.textContent = '🔍 Searching the web…';
+                for (const tc of choice.delta.tool_calls) {
+                  const idx = tc.index ?? 0;
+                  if (!toolCalls[idx]) toolCalls[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } };
+                  if (tc.id) toolCalls[idx].id = tc.id;
+                  if (tc.function?.name) toolCalls[idx].function.name += tc.function.name;
+                  if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
+                }
+              }
+
+              if (choice.finish_reason) finishReason = choice.finish_reason;
+
+              const delta = choice.delta?.content || '';
+              if (delta) {
+                if (full === '' && bubble.textContent.startsWith('🔍')) bubble.textContent = '';
+                full += delta;
+                assistantContent += delta;
+                bubble.textContent = full;
+                chatEl.scrollTop = chatEl.scrollHeight;
+              }
+            } catch {}
           }
-          // finish_reason tool_calls = search done, response coming next
-          if (choice.finish_reason === 'tool_calls') {
-            bubble.textContent = '🔍 Analysing results…';
-            full = '';
-            continue;
-          }
-          const delta = choice.delta?.content || '';
-          if (delta) {
-            if (full === '' && bubble.textContent.startsWith('🔍')) bubble.textContent = '';
-            full += delta;
-            bubble.textContent = full;
-            chatEl.scrollTop = chatEl.scrollHeight;
-          }
-        } catch {}
+        }
+
+        const validTCs = toolCalls.filter(Boolean);
+        if (finishReason === 'tool_calls' && validTCs.length > 0) {
+          // Web search triggered — build follow-up request
+          // Moonshot builtin: just echo the arguments back, server fills in the search results
+          bubble.textContent = '🔍 Analysing results…';
+          full = '';
+          currentPayload = {
+            ...currentPayload,
+            messages: [
+              ...currentPayload.messages,
+              {
+                role: 'assistant',
+                content: assistantContent || null,
+                tool_calls: validTCs.map(tc => ({
+                  id: tc.id,
+                  type: 'function',
+                  function: { name: tc.function.name, arguments: tc.function.arguments }
+                }))
+              },
+              ...validTCs.map(tc => ({
+                role: 'tool',
+                tool_call_id: tc.id,
+                name: tc.function.name,
+                content: tc.function.arguments  // Echo args back as-is per Moonshot docs
+              }))
+            ]
+          };
+          // Continue loop to get the actual answer
+        } else {
+          keepGoing = false;
+        }
+      }
+
+    } else {
+      // OpenRouter: single stream — openrouter:web_search is fully server-side
+      const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+
+      removeTyping();
+      bubble = addMessage('assistant', '');
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const rawData = line.slice(6).trim();
+          if (rawData === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(rawData);
+            const choice = parsed.choices?.[0];
+            if (!choice) continue;
+            if (choice.delta?.tool_calls) {
+              if (!bubble.textContent) bubble.textContent = '🔍 Searching the web…';
+              continue;
+            }
+            if (choice.finish_reason === 'tool_calls') {
+              bubble.textContent = '🔍 Analysing results…';
+              full = '';
+              continue;
+            }
+            const delta = choice.delta?.content || '';
+            if (delta) {
+              if (full === '' && bubble.textContent.startsWith('🔍')) bubble.textContent = '';
+              full += delta;
+              bubble.textContent = full;
+              chatEl.scrollTop = chatEl.scrollHeight;
+            }
+          } catch {}
+        }
       }
     }
 
-    if (!full) full = bubble.textContent; // fallback if content came via non-standard path
-    messages.push({ role: 'assistant', content: full });
-    saveCurrentConversation();
+    // Only save real content — never save search indicator text as assistant message
+    if (!full && bubble && !bubble.textContent.startsWith('🔍')) full = bubble.textContent;
+    if (full) {
+      messages.push({ role: 'assistant', content: full });
+      saveCurrentConversation();
+    } else {
+      messages.pop(); // no real response — discard the user message we added
+    }
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    const tokens  = Math.round(full.length / 4);
+    const tokens  = Math.round((full || '').length / 4);
     const docNote = docText ? ' · 📘 guide active' : '';
-    setStatus(`✓ ${elapsed}s · ~${tokens} tokens · 🔀 OpenRouter${docNote}`, 'ok');
+    setStatus(`✓ ${elapsed}s · ~${tokens} tokens${docNote}`, 'ok');
 
   } catch (err) {
     removeTyping();
     addMessage('assistant', `Error: ${err.message}`, true);
     messages.pop();
     setStatus(`✗ ${err.message}`, 'error');
-    saveCurrentConversation(); // save what we have even on error
+    saveCurrentConversation();
   }
 
   isLoading = false; sendBtn.disabled = false; inputEl.focus();
