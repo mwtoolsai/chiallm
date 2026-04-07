@@ -613,18 +613,14 @@ const docLoading = document.getElementById('doc-loading');
 
 // ── Load saved API key from localStorage ──
 function loadSavedKey() {
-  moonshotKey = localStorage.getItem(STORAGE_KEY_MOONSHOT) || '';
   openrouterKey = localStorage.getItem(STORAGE_KEY_OPENROUTER) || '';
-  if (moonshotKey) document.getElementById('key-moonshot-input').value = moonshotKey;
   if (openrouterKey) document.getElementById('key-openrouter-input').value = openrouterKey;
-  if (!moonshotKey && !openrouterKey) {
+  if (!openrouterKey) {
     document.getElementById('key-prompt').classList.add('show');
   }
 }
 function saveKeysFromOverlay() {
-  const mk = document.getElementById('key-moonshot-input').value.trim();
   const ok = document.getElementById('key-openrouter-input').value.trim();
-  if (mk) { moonshotKey = mk; localStorage.setItem(STORAGE_KEY_MOONSHOT, mk); }
   if (ok) { openrouterKey = ok; localStorage.setItem(STORAGE_KEY_OPENROUTER, ok); }
   document.getElementById('key-prompt').classList.remove('show');
 }
