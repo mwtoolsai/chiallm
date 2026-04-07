@@ -237,6 +237,8 @@
   #send-btn:hover  { background:#4f46e5; }
   #send-btn:active { transform:scale(.95); }
   #send-btn:disabled { background:#3a3a3a; color:#555; cursor:not-allowed; transform:none; }
+  #send-btn.stopping { background:#ef4444; font-size:14px; }
+  #send-btn.stopping:hover { background:#dc2626; }
 
 
   /* ── Empty state ── */
@@ -518,6 +520,11 @@ let moonshotKey = '';
 let openrouterKey = '';
 let messages  = [];
 let isLoading = false;
+let abortController = null;
+
+function stopGeneration() {
+  if (abortController) abortController.abort();
+}
 let docText   = '';
 let docFilename = '';
 
@@ -1122,7 +1129,12 @@ async function sendMessage() {
   const chosenModel = selectedModel;
 
   inputEl.value = ''; inputEl.style.height = 'auto';
-  isLoading = true; sendBtn.disabled = true;
+  isLoading = true;
+  abortController = new AbortController();
+  sendBtn.textContent = '■';
+  sendBtn.classList.add('stopping');
+  sendBtn.disabled = false;
+  sendBtn.onclick = stopGeneration;
 
   messages.push({ role: 'user', content: text });
   addMessage('user', text);
@@ -1179,7 +1191,7 @@ async function sendMessage() {
       let firstRequest = true;
 
       while (keepGoing) {
-        const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(currentPayload) });
+        const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(currentPayload), signal: abortController?.signal });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
 
         if (firstRequest) {
@@ -1272,7 +1284,7 @@ async function sendMessage() {
 
     } else {
       // OpenRouter: single stream — openrouter:web_search is fully server-side
-      const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+      const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(payload), signal: abortController?.signal });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
 
       removeTyping();
@@ -1340,7 +1352,7 @@ async function sendMessage() {
         : { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true,
             stream_options: { include_usage: true }, tools: [{ type: 'openrouter:web_search' }] };
 
-      const contResp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(contPayload) });
+      const contResp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(contPayload), signal: abortController?.signal });
       if (!contResp.ok) break; // don't throw on continuation failure — keep what we have
 
       const contReader = contResp.body.getReader();
@@ -1405,13 +1417,32 @@ async function sendMessage() {
 
   } catch (err) {
     removeTyping();
-    addMessage('assistant', `Error: ${err.message}`, true);
-    messages.pop();
-    setStatus(`✗ ${err.message}`, 'error');
-    saveCurrentConversation();
+    if (err.name === 'AbortError') {
+      // User stopped generation — save whatever was streamed so far
+      if (full && bubble) {
+        bubble.textContent += ' ▪';  // small marker showing response was cut
+        messages.push({ role: 'assistant', content: full + ' ▪' });
+        addMessageMeta(bubble, { promptTokens: 0, completionTokens: 0, model: selectedModel, content: full });
+        saveCurrentConversation();
+      } else {
+        messages.pop(); // nothing streamed yet — discard user message
+      }
+      setStatus('⏹ Stopped', '');
+    } else {
+      addMessage('assistant', `Error: ${err.message}`, true);
+      messages.pop();
+      setStatus(`✗ ${err.message}`, 'error');
+      saveCurrentConversation();
+    }
   }
 
-  isLoading = false; sendBtn.disabled = false; inputEl.focus();
+  isLoading = false;
+  abortController = null;
+  sendBtn.textContent = '➤';
+  sendBtn.classList.remove('stopping');
+  sendBtn.disabled = false;
+  sendBtn.onclick = sendMessage;
+  inputEl.focus();
 }
 </script>
 </body>
