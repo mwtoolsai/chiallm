@@ -18,6 +18,7 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
+    margin-left: 260px;
   }
 
   /* ── Top bar ── */
@@ -32,34 +33,49 @@
     flex-wrap: wrap;
   }
 
-  #topbar h1 { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; }
+  #topbar .topbar-right { margin-left: auto; }
 
-  #model-select {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
-    color: #e5e5e5;
-    padding: 5px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    outline: none;
-    cursor: pointer;
-    flex-shrink: 0;
-    max-width: 220px;
+  /* ── Custom model dropdown with status dots ── */
+  #model-dropdown { position: relative; flex-shrink: 0; }
+  #model-dropdown-btn {
+    background: #2a2a2a; border: 1px solid #3a3a3a; color: #ccc;
+    padding: 8px 10px; border-radius: 10px; font-size: 11px;
+    outline: none; cursor: pointer; height: 44px;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
   }
-
-  #api-key-input {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
-    color: #e5e5e5;
-    padding: 5px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    outline: none;
-    width: 260px;
-    flex-shrink: 0;
+  #model-dropdown-btn:hover { border-color: #555; }
+  #model-dropdown-btn .arrow { font-size: 9px; color: #666; margin-left: 2px; }
+  #model-dropdown-panel {
+    display: none; position: absolute; bottom: 50px; right: 0;
+    width: 310px; background: #1e1e1e; border: 1px solid #3a3a3a;
+    border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 100; max-height: 420px; overflow-y: auto; padding: 6px 0;
   }
-  #api-key-input:focus { border-color: #6366f1; }
-  #api-key-input.saved { border-color: #10b98160; }
+  #model-dropdown-panel.open { display: block; }
+  .mdl-group {
+    font-size: 10px; color: #666; padding: 8px 14px 4px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .mdl-group .test-all-btn {
+    font-size: 10px; color: #6366f1; background: none; border: none;
+    cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 500;
+  }
+  .mdl-group .test-all-btn:hover { color: #a5b4fc; text-decoration: underline; }
+  .mdl-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+    cursor: pointer; font-size: 12px; color: #ccc; transition: background 0.1s;
+  }
+  .mdl-item:hover { background: #2a2a2a; }
+  .mdl-item.active { background: #1e1b4b; color: #c7d2fe; }
+  .mdl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .mdl-dot.gray { background: #555; }
+  .mdl-dot.green { background: #22c55e; box-shadow: 0 0 4px #22c55e80; }
+  .mdl-dot.red { background: #ef4444; box-shadow: 0 0 4px #ef444480; }
+  .mdl-dot.testing { background: #eab308; animation: pulse-dot 0.8s ease infinite alternate; }
+  @keyframes pulse-dot { from { opacity: 0.4; } to { opacity: 1; } }
+  .mdl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* API key input removed from topbar — now only in overlay */
 
   .topbar-right { display: flex; gap: 8px; align-items: center; margin-left: auto; flex-shrink: 0; }
 
@@ -75,6 +91,18 @@
     transition: all .15s;
   }
   #system-prompt-btn:hover, #clear-btn:hover { background: #333; color: #e5e5e5; }
+  #key-settings-btn {
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    color: #aaa;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s;
+  }
+  #key-settings-btn:hover { background: #333; color: #e5e5e5; }
   #load-doc-btn { border-color: #10b98140; color: #10b981; }
   #load-doc-btn:hover { background: #10b98120; border-color: #10b981; }
   #load-doc-btn.loaded { background: #10b98120; border-color: #10b981; }
@@ -295,27 +323,15 @@
   ::-webkit-scrollbar-thumb:hover { background:#444; }
 
   /* ── History panel ── */
-  #history-overlay {
-    display: none;
-    position: fixed; inset: 0;
-    background: #000000aa;
-    backdrop-filter: blur(3px);
-    z-index: 50;
-  }
-  #history-overlay.show { display: block; }
-
+  /* history-overlay removed — panel always visible */
   #history-panel {
     position: fixed; top: 0; left: 0; bottom: 0;
-    width: 300px;
+    width: 260px;
     background: #141414;
     border-right: 1px solid #2a2a2a;
     display: flex; flex-direction: column;
     z-index: 51;
-    transform: translateX(-100%);
-    transition: transform 0.22s ease;
   }
-  #history-panel.open { transform: translateX(0); }
-
   #history-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 16px;
@@ -386,23 +402,15 @@
     padding: 30px 16px; line-height: 1.8;
   }
 
-  #history-btn {
-    background: #2a2a2a; border: 1px solid #3a3a3a;
-    color: #aaa; padding: 5px 12px; border-radius: 6px;
-    font-size: 12px; cursor: pointer; white-space: nowrap;
-    transition: all .15s;
-  }
-  #history-btn:hover { background: #333; color: #e5e5e5; }
+  /* history-btn removed — panel always visible */
 </style>
 </head>
 <body>
 
 <!-- History overlay + panel -->
-<div id="history-overlay" onclick="closeHistory()"></div>
 <div id="history-panel">
   <div id="history-header">
-    <h3>💬 Chat History</h3>
-    <button id="history-close" onclick="closeHistory()">✕</button>
+    <h3>💬 History</h3>
   </div>
   <button id="history-new-btn" onclick="newChat()">＋ New Conversation</button>
   <div id="history-list"></div>
@@ -422,35 +430,13 @@
 </div>
 
 <div id="topbar">
-  <h1>⚡ Chia LLM</h1>
-
-  <select id="model-select">
-    <optgroup label="— Free Models (all support 37.5K guide) —">
-      <option value="qwen/qwen3.6-plus:free">🆓 Qwen3.6 Plus · 1M ctx (FREE)</option>
-      <option value="nvidia/nemotron-3-super-120b-a12b:free">🆓 NVIDIA Nemotron 120B · 262K ctx (FREE)</option>
-      <option value="minimax/minimax-m2.5:free">🆓 MiniMax M2.5 · 196K ctx (FREE)</option>
-      <option value="nvidia/nemotron-3-nano-30b-a3b:free">🆓 NVIDIA Nemotron 30B · 256K ctx (FREE)</option>
-      <option value="arcee-ai/trinity-large-preview:free">🆓 Arcee Trinity · 131K ctx (FREE)</option>
-      <option value="stepfun/step-3.5-flash:free">🆓 StepFun 3.5 Flash · 256K ctx (FREE)</option>
-    </optgroup>
-    <optgroup label="— Paid Models —">
-      <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B · 128K · ~$0.30/session</option>
-      <option value="moonshotai/kimi-k2">Kimi K2.5 · 262K · ~$0.25/session</option>
-      <option value="google/gemini-2.5-pro">Gemini 2.5 Pro · 1M · ~$1.50/session</option>
-      <option value="anthropic/claude-sonnet-4-5">Claude Sonnet · 1M · ~$1.80/session</option>
-    </optgroup>
-  </select>
-
-  <input id="api-key-input" type="password" placeholder="OpenRouter API key (sk-or-v1-...)" />
-
   <div class="topbar-right">
-    <button id="history-btn" onclick="openHistory()">💬 History</button>
     <button id="load-doc-btn" onclick="document.getElementById('doc-file-input').click()">📄 Load Guide</button>
     <button id="system-prompt-btn" onclick="toggleSystem()">⚙ System Prompt</button>
+    <button id="key-settings-btn" onclick="document.getElementById('key-prompt').classList.add('show')" title="API Key Settings">🔑</button>
     <button id="clear-btn" onclick="newChat()">＋ New</button>
   </div>
 </div>
-
 <div id="system-panel">
   <label>System prompt (always sent as context before every message)</label>
   <textarea id="system-input">You are a professional YouTube documentary scriptwriter specialising in dramatic, engaging long-form narration. Write compelling scripts that hook viewers and sustain their attention for 20-30 minutes.</textarea>
@@ -488,6 +474,27 @@
 <div id="input-area">
   <div id="input-row">
     <textarea id="user-input" placeholder="Type a message… (Enter to send, Shift+Enter for new line)" rows="1"></textarea>
+    <div id="model-dropdown">
+      <button id="model-dropdown-btn" type="button" onclick="toggleModelDropdown()">
+        <span class="mdl-dot gray" id="btn-dot"></span>
+        <span id="btn-label">Qwen3.6 Plus · 1M</span>
+        <span class="arrow">▾</span>
+      </button>
+      <div id="model-dropdown-panel">
+        <div class="mdl-group">Free Models<button class="test-all-btn" onclick="testAllFreeModels(event)">⚡ Test All</button></div>
+        <div class="mdl-item active" data-value="qwen/qwen3.6-plus:free" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="qwen/qwen3.6-plus:free"></span><span class="mdl-name">Qwen3.6 Plus · 1M ctx</span></div>
+        <div class="mdl-item" data-value="nvidia/nemotron-3-super-120b-a12b:free" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="nvidia/nemotron-3-super-120b-a12b:free"></span><span class="mdl-name">NVIDIA Nemotron 120B · 262K</span></div>
+        <div class="mdl-item" data-value="minimax/minimax-m2.5:free" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="minimax/minimax-m2.5:free"></span><span class="mdl-name">MiniMax M2.5 · 196K</span></div>
+        <div class="mdl-item" data-value="nvidia/nemotron-3-nano-30b-a3b:free" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="nvidia/nemotron-3-nano-30b-a3b:free"></span><span class="mdl-name">NVIDIA Nemotron 30B · 256K</span></div>
+        <div class="mdl-item" data-value="arcee-ai/trinity-large-preview:free" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="arcee-ai/trinity-large-preview:free"></span><span class="mdl-name">Arcee Trinity · 131K</span></div>
+        <div class="mdl-item" data-value="stepfun/step-3.5-flash:free" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="stepfun/step-3.5-flash:free"></span><span class="mdl-name">StepFun 3.5 Flash · 256K</span></div>
+        <div class="mdl-group" style="margin-top:4px">Paid Models</div>
+        <div class="mdl-item" data-value="meta-llama/llama-3.3-70b-instruct" onclick="pickModel(this)"><span class="mdl-dot gray"></span><span class="mdl-name">Llama 3.3 70B · 128K · ~$0.30</span></div>
+        <div class="mdl-item" data-value="moonshotai/kimi-k2" onclick="pickModel(this)"><span class="mdl-dot gray"></span><span class="mdl-name">Kimi K2.5 · 262K · ~$0.25</span></div>
+        <div class="mdl-item" data-value="google/gemini-2.5-pro" onclick="pickModel(this)"><span class="mdl-dot gray"></span><span class="mdl-name">Gemini 2.5 Pro · 1M · ~$1.50</span></div>
+        <div class="mdl-item" data-value="anthropic/claude-sonnet-4-5" onclick="pickModel(this)"><span class="mdl-dot gray"></span><span class="mdl-name">Claude Sonnet · 1M · ~$1.80</span></div>
+      </div>
+    </div>
     <button id="send-btn" onclick="sendMessage()">➤</button>
   </div>
   <div class="hint" id="hint-text">OpenRouter · Free models available · Load your production guide with 📄</div>
@@ -517,9 +524,93 @@ const emptyState = document.getElementById('empty-state');
 const inputEl    = document.getElementById('user-input');
 const sendBtn    = document.getElementById('send-btn');
 const statusEl   = document.getElementById('status');
-const modelSel   = document.getElementById('model-select');
-const apiKeyInput = document.getElementById('api-key-input');
 const docBar     = document.getElementById('doc-bar');
+
+// ── Custom model dropdown state ──
+let selectedModel = 'qwen/qwen3.6-plus:free';
+const modelStatus = {}; // modelId → 'green' | 'red' | 'testing' | 'gray'
+const MODEL_LABELS = {};
+document.querySelectorAll('.mdl-item[data-value]').forEach(el => {
+  MODEL_LABELS[el.dataset.value] = el.querySelector('.mdl-name').textContent;
+});
+
+function toggleModelDropdown() {
+  const panel = document.getElementById('model-dropdown-panel');
+  panel.classList.toggle('open');
+  // Auto-test free models when opening if not tested yet
+  if (panel.classList.contains('open') && apiKey) {
+    const untested = document.querySelectorAll('.mdl-item[data-value$=":free"] .mdl-dot.gray');
+    if (untested.length > 0) testAllFreeModels();
+  }
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#model-dropdown')) {
+    document.getElementById('model-dropdown-panel').classList.remove('open');
+  }
+});
+
+function pickModel(el) {
+  selectedModel = el.dataset.value;
+  document.querySelectorAll('.mdl-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  // Update button label + dot
+  document.getElementById('btn-label').textContent = el.querySelector('.mdl-name').textContent.split('·')[0].trim();
+  const dotEl = el.querySelector('.mdl-dot');
+  const btnDot = document.getElementById('btn-dot');
+  btnDot.className = dotEl.className;
+  document.getElementById('model-dropdown-panel').classList.remove('open');
+}
+
+async function testModel(modelId) {
+  if (!apiKey) return;
+  const dot = document.querySelector(`.mdl-dot[data-dot="${modelId}"]`);
+  if (!dot) return;
+  dot.className = 'mdl-dot testing';
+  modelStatus[modelId] = 'testing';
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://chiallm.app',
+        'X-Title': 'Chia LLM'
+      },
+      body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.error) {
+        dot.className = 'mdl-dot red';
+        modelStatus[modelId] = 'red';
+      } else {
+        dot.className = 'mdl-dot green';
+        modelStatus[modelId] = 'green';
+      }
+    } else {
+      dot.className = 'mdl-dot red';
+      modelStatus[modelId] = 'red';
+    }
+  } catch {
+    dot.className = 'mdl-dot red';
+    modelStatus[modelId] = 'red';
+  }
+  // Sync button dot if this is the selected model
+  if (modelId === selectedModel) {
+    document.getElementById('btn-dot').className = dot.className;
+  }
+}
+
+async function testAllFreeModels(e) {
+  if (e) e.stopPropagation();
+  const freeItems = document.querySelectorAll('.mdl-item[data-value$=":free"]');
+  const promises = [];
+  freeItems.forEach(item => {
+    const id = item.dataset.value;
+    promises.push(testModel(id));
+  });
+  await Promise.all(promises);
+}
 const docLoading = document.getElementById('doc-loading');
 
 // ── Load saved API key from localStorage ──
@@ -527,13 +618,10 @@ function loadSavedKey() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     apiKey = saved;
-    apiKeyInput.value = saved;
-    apiKeyInput.classList.add('saved');
   } else {
     document.getElementById('key-prompt').classList.add('show');
   }
 }
-
 function saveKeyFromOverlay() {
   const val = document.getElementById('key-overlay-input').value.trim();
   if (!val) return;
@@ -545,14 +633,6 @@ function saveKeyFromOverlay() {
 }
 
 // Save key when changed in topbar
-apiKeyInput.addEventListener('blur', () => {
-  const val = apiKeyInput.value.trim();
-  if (val) {
-    apiKey = val;
-    localStorage.setItem(STORAGE_KEY, val);
-    apiKeyInput.classList.add('saved');
-  }
-});
 
 // ── Load saved production guide from localStorage ──
 function loadSavedDoc() {
@@ -568,6 +648,7 @@ function loadSavedDoc() {
 }
 
 loadSavedKey();
+renderHistoryPanel();
 loadSavedDoc();
 
 // ── Textarea auto-resize ──
@@ -613,7 +694,7 @@ function saveCurrentConversation() {
     const idx = history.findIndex(c => c.id === currentConvId);
     if (idx !== -1) {
       history[idx].messages = [...messages];
-      history[idx].model = modelSel.value;
+      history[idx].model = selectedModel;
       history[idx].msgCount = messages.filter(m => m.role === 'user').length;
       _saveHistory(history);
       return;
@@ -625,7 +706,7 @@ function saveCurrentConversation() {
     title,
     date: dateStr,
     time: timeStr,
-    model: modelSel.value,
+    model: selectedModel,
     msgCount: messages.filter(m => m.role === 'user').length,
     messages: [...messages],
   };
@@ -667,11 +748,10 @@ function loadConversation(id) {
 
   // Set model if saved
   if (conv.model) {
-    const opt = [...modelSel.options].find(o => o.value === conv.model);
-    if (opt) modelSel.value = conv.model;
+    const item = document.querySelector(`.mdl-item[data-value="${conv.model}"]`);
+    if (item) { pickModel(item); } else { selectedModel = conv.model; }
   }
 
-  closeHistory();
   setStatus(`✓ Loaded: "${conv.title.slice(0, 40)}…"`, 'ok');
   renderHistoryPanel();
 }
@@ -715,12 +795,9 @@ function renderHistoryPanel() {
 function openHistory() {
   saveCurrentConversation();
   renderHistoryPanel();
-  document.getElementById('history-panel').classList.add('open');
-  document.getElementById('history-overlay').classList.add('show');
 }
 function closeHistory() {
-  document.getElementById('history-panel').classList.remove('open');
-  document.getElementById('history-overlay').classList.remove('show');
+  /* History panel always visible — no-op */
 }
 
 // Auto-save on page close
@@ -879,7 +956,7 @@ async function sendMessage() {
   }
 
   const sysPrompt   = buildSystemPrompt();
-  const chosenModel = modelSel.value;
+  const chosenModel = selectedModel;
 
   inputEl.value = ''; inputEl.style.height = 'auto';
   isLoading = true; sendBtn.disabled = true;
