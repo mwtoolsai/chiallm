@@ -486,9 +486,21 @@
         <span class="arrow">▾</span>
       </button>
       <div id="model-dropdown-panel">
-        <div class="mdl-group">Research Models</div>
-        <div class="mdl-item active" data-value="kimi-k2.5" data-provider="moonshot" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="kimi-k2.5"></span><span class="mdl-name">Kimi K2.5 + Web Search · 256K</span></div>
+        <div class="mdl-group">🌙 Moonshot (Primary)</div>
+        <div class="mdl-item active" data-value="kimi-k2.5" data-provider="moonshot" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="kimi-k2.5"></span><span class="mdl-name">Kimi K2.5 · 256K · web search</span></div>
+        <div class="mdl-group" style="margin-top:4px">🆓 OpenRouter Free · web search</div>
+        <div class="mdl-item" data-value="qwen/qwen3.6-plus:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="qwen/qwen3.6-plus:free"></span><span class="mdl-name">Qwen3.6 Plus · 1M ctx</span></div>
+        <div class="mdl-item" data-value="nvidia/nemotron-3-super-120b-a12b:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="nvidia/nemotron-3-super-120b-a12b:free"></span><span class="mdl-name">NVIDIA Nemotron 120B · 262K</span></div>
+        <div class="mdl-item" data-value="minimax/minimax-m2.5:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="minimax/minimax-m2.5:free"></span><span class="mdl-name">MiniMax M2.5 · 196K</span></div>
+        <div class="mdl-item" data-value="nvidia/nemotron-3-nano-30b-a3b:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="nvidia/nemotron-3-nano-30b-a3b:free"></span><span class="mdl-name">NVIDIA Nemotron 30B · 256K</span></div>
+        <div class="mdl-item" data-value="arcee-ai/trinity-large-preview:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="arcee-ai/trinity-large-preview:free"></span><span class="mdl-name">Arcee Trinity · 131K</span></div>
+        <div class="mdl-item" data-value="stepfun/step-3.5-flash:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="stepfun/step-3.5-flash:free"></span><span class="mdl-name">StepFun 3.5 Flash · 256K</span></div>
+        <div class="mdl-group" style="margin-top:4px">💳 OpenRouter Paid · web search</div>
+        <div class="mdl-item" data-value="moonshotai/kimi-k2.5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="moonshotai/kimi-k2.5"></span><span class="mdl-name">Kimi K2.5 · 262K · ~$0.25</span></div>
+        <div class="mdl-item" data-value="meta-llama/llama-3.3-70b-instruct" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="meta-llama/llama-3.3-70b-instruct"></span><span class="mdl-name">Llama 3.3 70B · 128K · ~$0.30</span></div>
         <div class="mdl-item" data-value="perplexity/sonar-pro-search" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="perplexity/sonar-pro-search"></span><span class="mdl-name">Perplexity Sonar Pro · 200K</span></div>
+        <div class="mdl-item" data-value="google/gemini-2.5-pro" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="google/gemini-2.5-pro"></span><span class="mdl-name">Gemini 2.5 Pro · 1M · ~$1.50</span></div>
+        <div class="mdl-item" data-value="anthropic/claude-sonnet-4-5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="anthropic/claude-sonnet-4-5"></span><span class="mdl-name">Claude Sonnet · 1M · ~$1.80</span></div>
       </div>
     </div>
     <button id="send-btn" onclick="sendMessage()">➤</button>
@@ -937,7 +949,8 @@ async function sendMessage() {
         model: selectedModel,
         messages: [{ role: 'system', content: sysPrompt }, ...messages],
         max_tokens: 8192,
-        stream: true
+        stream: true,
+        tools: [{ type: 'openrouter:web_search' }]
       };
     }
 
@@ -958,20 +971,44 @@ async function sendMessage() {
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      for (const line of decoder.decode(value).split('\n')) {
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete last line
+      for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
         const data = line.slice(6).trim();
         if (data === '[DONE]') continue;
         try {
-          const delta = JSON.parse(data).choices?.[0]?.delta?.content || '';
-          if (delta) { full += delta; bubble.textContent = full; chatEl.scrollTop = chatEl.scrollHeight; }
+          const parsed = JSON.parse(data);
+          const choice = parsed.choices?.[0];
+          if (!choice) continue;
+          // Skip tool_call chunks (Moonshot web search in progress) — show searching indicator
+          if (choice.delta?.tool_calls) {
+            if (!bubble.textContent) bubble.textContent = '🔍 Searching the web…';
+            continue;
+          }
+          // finish_reason tool_calls = search done, response coming next
+          if (choice.finish_reason === 'tool_calls') {
+            bubble.textContent = '🔍 Analysing results…';
+            full = '';
+            continue;
+          }
+          const delta = choice.delta?.content || '';
+          if (delta) {
+            if (full === '' && bubble.textContent.startsWith('🔍')) bubble.textContent = '';
+            full += delta;
+            bubble.textContent = full;
+            chatEl.scrollTop = chatEl.scrollHeight;
+          }
         } catch {}
       }
     }
 
+    if (!full) full = bubble.textContent; // fallback if content came via non-standard path
     messages.push({ role: 'assistant', content: full });
     saveCurrentConversation();
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -984,6 +1021,7 @@ async function sendMessage() {
     addMessage('assistant', `Error: ${err.message}`, true);
     messages.pop();
     setStatus(`✗ ${err.message}`, 'error');
+    saveCurrentConversation(); // save what we have even on error
   }
 
   isLoading = false; sendBtn.disabled = false; inputEl.focus();
