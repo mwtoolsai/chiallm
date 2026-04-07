@@ -1019,6 +1019,7 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
       ${isWarning ? `<button class="msg-btn write-now-btn" title="Clear this warning and write the script fresh — no context baggage" style="border-color:#f59e0b!important;color:#f59e0b!important;">✍️ Write Now</button>` : ''}
       ${isSetC  ? `<button class="msg-btn load-script-btn" title="Load as active script for targeted scene edits">🎬 Load Script</button>` : ''}
       ${isSetC  ? `<button class="msg-btn zip-btn"  title="Package as Set C ZIP">📦 Set C ZIP</button>` : ''}
+      ${isSetC  ? `<button class="msg-btn check-btn" title="Run Pass 3 verification — scene count, word counts, ratios, violations">📊 Check</button>` : ''}
       ${isLong  ? `<button class="msg-btn save-btn" title="Save as .txt">💾 Save</button>` : ''}
       <button class="msg-btn copy-btn" title="Copy to clipboard">📋 Copy</button>
       ${isLong  ? `<button class="msg-btn cont-btn${contRequested ? ' cont-pulse' : ''}" title="Continue writing — appends to this response">▶ Continue</button>` : ''}
@@ -1071,6 +1072,8 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
     inputEl.value = originalPrompt;
     sendMessage();
   });
+  const checkBtn = meta.querySelector('.check-btn');
+  if (checkBtn) checkBtn.addEventListener('click', () => showVerifyReport(content || bub.textContent || ''));
   if (saveBtn) saveBtn.addEventListener('click', () => {
     const text = content || bub.textContent || '';
     const blob = new Blob([text], { type: 'text/plain' });
@@ -1349,6 +1352,110 @@ async function _continueResponse(bub, originalContent, metaEl) {
     else { _appendDelta(bub, `\n\n[Error: ${err.message}]`); restore(); setStatus(`✗ ${err.message}`, 'error'); }
   }
   _resetSendBtn();
+}
+
+// ── Set C Pass 3 Verification ──
+function verifySetC(content) {
+  const scenes = [];
+  const sceneRegex = /\[SCENE (\d+): (IMAGE|VIDEO|TALKINGHEAD):(.*?)\](.*?)(?=\[SCENE \d+:|$)/gs;
+  let m;
+  while ((m = sceneRegex.exec(content)) !== null) {
+    const narration = m[4].replace(/\[TRANSITION:[^\]]*\]/g, '').trim();
+    scenes.push({ num: parseInt(m[1]), type: m[2], prompt: m[3].trim(), narration });
+  }
+
+  const total = scenes.length;
+  const counts = { IMAGE: 0, VIDEO: 0, TALKINGHEAD: 0 };
+  scenes.forEach(s => counts[s.type]++);
+
+  const violations = [];
+  const warnings = [];
+
+  // 1. Scene count
+  if (total < 260) violations.push(`Scene count ${total} — too short (min 280)`);
+  else if (total > 320) warnings.push(`Scene count ${total} — slightly over target (280–300)`);
+  else if (total > 300) warnings.push(`Scene count ${total} — at upper end of 280–300 target`);
+
+  // 2. Ratios
+  const imgPct = counts.IMAGE / total * 100;
+  const vidPct = counts.VIDEO / total * 100;
+  const thPct  = counts.TALKINGHEAD / total * 100;
+  if (imgPct > 42) warnings.push(`IMAGE ratio ${imgPct.toFixed(1)}% — target ~35%`);
+  if (vidPct < 38) warnings.push(`VIDEO ratio ${vidPct.toFixed(1)}% — target ~45%`);
+  if (thPct < 15 || thPct > 25) warnings.push(`TALKINGHEAD ratio ${thPct.toFixed(1)}% — target ~20%`);
+
+  // 3. Word counts & narration checks
+  let totalWords = 0;
+  let under8 = [], over20 = [], missingNarration = [], missingPrompt = [], nonAscii = [];
+  let consecutiveTH = [];
+  let prevType = null;
+  scenes.forEach(s => {
+    const words = s.narration ? s.narration.split(/\s+/).filter(Boolean).length : 0;
+    totalWords += words;
+    if (!s.narration || words === 0) missingNarration.push(s.num);
+    if (!s.prompt || s.prompt.length < 20) missingPrompt.push(s.num);
+    if (words < 8 && words > 0) under8.push({ num: s.num, type: s.type, words, text: s.narration.slice(0, 60) });
+    if (words > 20) over20.push({ num: s.num, type: s.type, words, text: s.narration.slice(0, 60) });
+    if (/[^\x00-\x7F]/.test(s.narration + s.prompt)) nonAscii.push(s.num);
+    if (s.type === 'TALKINGHEAD' && prevType === 'TALKINGHEAD') consecutiveTH.push(s.num);
+    prevType = s.type;
+  });
+
+  if (totalWords < 3800) violations.push(`Total words ${totalWords} — below minimum 3,800`);
+  else if (totalWords > 5400) warnings.push(`Total words ${totalWords} — above target 5,400`);
+  if (missingNarration.length) violations.push(`Missing narration: scenes ${missingNarration.slice(0,5).join(', ')}${missingNarration.length > 5 ? '…' : ''}`);
+  if (missingPrompt.length) violations.push(`Missing/short visual prompt: scenes ${missingPrompt.slice(0,5).join(', ')}${missingPrompt.length > 5 ? '…' : ''} (Pass 1 narration-only detected)`);
+  if (under8.length) violations.push(`${under8.length} scenes under 8 words:\n    ${under8.slice(0,5).map(s=>`Scene ${s.num} [${s.type}] ${s.words}w: "${s.text}"`).join('\n    ')}`);
+  if (over20.length) violations.push(`${over20.length} scenes over 20 words:\n    ${over20.slice(0,5).map(s=>`Scene ${s.num} [${s.type}] ${s.words}w`).join(', ')}`);
+  if (consecutiveTH.length) violations.push(`Consecutive TALKINGHEAD at scenes: ${consecutiveTH.join(', ')}`);
+  if (nonAscii.length) violations.push(`Non-ASCII characters in scenes: ${nonAscii.slice(0,5).join(', ')}`);
+
+  // 4. Transitions
+  const transitions = (content.match(/\[TRANSITION:[^\]]*\]/g) || []);
+  const fadeBlacks = transitions.filter(t => /FADE_BLACK/i.test(t)).length;
+  if (transitions.length < 7) warnings.push(`Only ${transitions.length} transitions — target 7–15`);
+  else if (transitions.length > 15) warnings.push(`${transitions.length} transitions — target 7–15`);
+  if (fadeBlacks < 3) warnings.push(`Only ${fadeBlacks} FADE_BLACK transitions — need ≥3`);
+
+  // 5. Overlays
+  const textOverlays = (content.match(/\[TEXT:/gi) || []).length;
+  const graphicOverlays = (content.match(/\[GRAPHIC:/gi) || []).length;
+  if (textOverlays < 8) warnings.push(`Only ${textOverlays} TEXT overlays — target 8–15`);
+  else if (textOverlays > 15) warnings.push(`${textOverlays} TEXT overlays — target 8–15`);
+  if (graphicOverlays < 2) warnings.push(`Only ${graphicOverlays} GRAPHIC overlays — target 2–3`);
+
+  // 6. Mid-sentence cuts
+  const midCuts = scenes.filter(s => s.narration && !/[.!?…]$/.test(s.narration.trimEnd())).length;
+  const midPct = total > 0 ? midCuts / total * 100 : 0;
+  if (midPct < 5) warnings.push(`Mid-sentence cuts: ${midCuts}/${total} (${midPct.toFixed(1)}%) — aim for natural cuts on action/emotion`);
+
+  return { total, counts, totalWords, violations, warnings, midCuts, midPct, imgPct, vidPct, thPct };
+}
+
+function showVerifyReport(content) {
+  const r = verifySetC(content);
+  const pass = r.violations.length === 0;
+  const lines = [];
+  lines.push(`PASS 3 VERIFICATION REPORT`);
+  lines.push(`${'─'.repeat(40)}`);
+  lines.push(`Scenes:    ${r.total} (target 280–300)`);
+  lines.push(`Words:     ${r.totalWords.toLocaleString()} (target 3,800–5,400)`);
+  lines.push(`IMAGE:     ${r.counts.IMAGE} (${r.imgPct.toFixed(1)}%)  target ~35%`);
+  lines.push(`VIDEO:     ${r.counts.VIDEO} (${r.vidPct.toFixed(1)}%)  target ~45%`);
+  lines.push(`TALKHEAD:  ${r.counts.TALKINGHEAD} (${r.thPct.toFixed(1)}%)  target ~20%`);
+  lines.push(`Mid-cuts:  ${r.midCuts} (${r.midPct.toFixed(1)}%)`);
+  lines.push(`${'─'.repeat(40)}`);
+  if (r.violations.length) {
+    lines.push(`❌ VIOLATIONS (${r.violations.length}):`);
+    r.violations.forEach(v => lines.push(`  • ${v}`));
+  }
+  if (r.warnings.length) {
+    lines.push(`⚠️  WARNINGS (${r.warnings.length}):`);
+    r.warnings.forEach(w => lines.push(`  • ${w}`));
+  }
+  if (pass && !r.warnings.length) lines.push(`✅ ALL CHECKS PASSED`);
+  else if (pass) lines.push(`✅ No hard violations — warnings above are advisory`);
+  alert(lines.join('\n'));
 }
 
 // ── Set C ZIP packaging ──
