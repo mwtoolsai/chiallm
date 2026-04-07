@@ -689,6 +689,10 @@ function loadConversation(id) {
   emptyState.style.display = 'none';
   messages.forEach(m => {
     const bub = addMessage(m.role, m.content);
+    // Attach copy/save meta to historical assistant messages (no token data available)
+    if (m.role === 'assistant' && m.content) {
+      addMessageMeta(bub, { promptTokens: 0, completionTokens: 0, model: conv.model || selectedModel, content: m.content });
+    }
   });
 
   // Set model if saved
