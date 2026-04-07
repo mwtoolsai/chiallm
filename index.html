@@ -472,10 +472,7 @@
   <div id="key-box">
     <h2>🔑 API Keys</h2>
     <p>Keys are stored only in your browser — never sent anywhere except their respective APIs.</p>
-    <label style="font-size:12px;color:#aaa;margin-top:12px;display:block;">Moonshot API Key (for Kimi K2.5)</label>
-    <input type="password" id="key-moonshot-input" placeholder="sk-..." style="width:100%;padding:10px 14px;background:#1e1e1e;border:1px solid #3a3a3a;color:#e5e5e5;border-radius:8px;font-size:14px;margin-top:4px;" />
-    <a class="key-link" href="https://platform.moonshot.ai/" target="_blank" style="font-size:11px;">→ Get key at platform.moonshot.ai</a>
-    <label style="font-size:12px;color:#aaa;margin-top:16px;display:block;">OpenRouter API Key (for Perplexity Sonar Pro)</label>
+    <label style="font-size:12px;color:#aaa;margin-top:12px;display:block;">OpenRouter API Key</label>
     <input type="password" id="key-openrouter-input" placeholder="sk-or-v1-..." style="width:100%;padding:10px 14px;background:#1e1e1e;border:1px solid #3a3a3a;color:#e5e5e5;border-radius:8px;font-size:14px;margin-top:4px;" />
     <a class="key-link" href="https://openrouter.ai/keys" target="_blank" style="font-size:11px;">→ Get key at openrouter.ai/keys</a>
     <button onclick="saveKeysFromOverlay()" style="margin-top:16px;width:100%;padding:12px;background:#6366f1;border:none;color:#fff;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Save Keys</button>
@@ -532,22 +529,14 @@
     <div id="model-dropdown">
       <button id="model-dropdown-btn" type="button" onclick="toggleModelDropdown()">
         <span class="mdl-dot gray" id="btn-dot"></span>
-        <span id="btn-label">Kimi K2.5 + Web Search</span>
+        <span id="btn-label">Qwen3.5 Plus</span>
         <span class="arrow">▾</span>
       </button>
       <div id="model-dropdown-panel">
         <div class="mdl-group">💳 OpenRouter Paid</div>
-        <div class="mdl-item" data-value="x-ai/grok-4.20" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="x-ai/grok-4.20"></span><span class="mdl-name">Grok 4.20 · 2M ctx · $2/$6 per M</span></div>
-        <div class="mdl-item" data-value="xiaomi/mimo-v2-pro" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="xiaomi/mimo-v2-pro"></span><span class="mdl-name">⭐ MiMo V2 Pro · #1 OpenRouter</span></div>
-        <div class="mdl-item" data-value="deepseek/deepseek-v3.2" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-v3.2"></span><span class="mdl-name">DeepSeek V3.2 · 128K · ~$0.35/M</span></div>
-        <div class="mdl-item" data-value="deepseek/deepseek-chat" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-chat"></span><span class="mdl-name">DeepSeek V3 · 64K · ~$0.27/M</span></div>
-        <div class="mdl-item" data-value="minimax/minimax-m2.7" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="minimax/minimax-m2.7"></span><span class="mdl-name">MiniMax M2.7 · 1M ctx</span></div>
         <div class="mdl-item active" data-value="qwen/qwen3.5-plus-02-15" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="qwen/qwen3.5-plus-02-15"></span><span class="mdl-name">Qwen3.5 Plus · ~$0.26/M in</span></div>
-        <div class="mdl-item" data-value="z-ai/glm-5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="z-ai/glm-5"></span><span class="mdl-name">GLM-5 · 745B · 128K · ~$0.72/M</span></div>
-        <div class="mdl-item" data-value="z-ai/glm-5-turbo" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="z-ai/glm-5-turbo"></span><span class="mdl-name">GLM-5 Turbo · 128K</span></div>
-        <div class="mdl-item" data-value="google/gemini-2.5-pro" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="google/gemini-2.5-pro"></span><span class="mdl-name">Gemini 2.5 Pro · 1M · ~$1.50/M</span></div>
-        <div class="mdl-item" data-value="anthropic/claude-sonnet-4-6" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="anthropic/claude-sonnet-4-6"></span><span class="mdl-name">Claude Sonnet 4.6 · 200K · ~$1.80/M</span></div>
-        <div class="mdl-item" data-value="anthropic/claude-opus-4-6" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="anthropic/claude-opus-4-6"></span><span class="mdl-name">Claude Opus 4.6 · 200K · ~$7.50/M</span></div>
+        <div class="mdl-item" data-value="qwen/qwen3.5-397b-a17b" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="qwen/qwen3.5-397b-a17b"></span><span class="mdl-name">Qwen3.5 397B A17B · ~$0.40/M in</span></div>
+        <div class="mdl-item" data-value="deepseek/deepseek-v3.2" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-v3.2"></span><span class="mdl-name">DeepSeek V3.2 · 128K · ~$0.35/M</span></div>
       </div>
     </div>
     <button id="send-btn" onclick="sendMessage()">➤</button>
