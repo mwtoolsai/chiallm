@@ -1692,10 +1692,18 @@ async function sendMessage() {
       // Only enable web search when no production guide is loaded.
       // When guide is active, model must write — web search causes loops/500s on some models.
       const orWebSearch = docText ? [] : [{ type: 'openrouter:web_search' }];
-      // Estimate system prompt tokens (~4 chars/token) to avoid exceeding model context window.
-      // DeepSeek V3 = 64K ctx. Our guide alone = ~37.5K tokens, so cap output at 16K.
+      // Estimate system prompt tokens (~4 chars/token) and set max_tokens based on model context.
+      // Use model-specific context budgets — Qwen3.5 397B/Plus have 262K–1M ctx, DeepSeek 128K.
+      const MODEL_CTX = {
+        'qwen/qwen3.5-397b-a17b':   { ctx: 200000, maxOut: 65536 },
+        'qwen/qwen3.5-plus-02-15':  { ctx: 200000, maxOut: 65536 },
+        'deepseek/deepseek-v3.2':   { ctx: 100000, maxOut: 32768 },
+      };
+      const ctxCfg = MODEL_CTX[selectedModel] || { ctx: 60000, maxOut: 32768 };
       const sysTokenEstimate = Math.ceil(sysPrompt.length / 4);
-      const orMaxTokens = Math.min(32768, Math.max(8192, 60000 - sysTokenEstimate));
+      // Reserve space for conversation history + thinking tokens (~8K buffer for Qwen thinking)
+      const thinkingBuffer = isQwen3 ? 8000 : 0;
+      const orMaxTokens = Math.min(ctxCfg.maxOut, Math.max(8192, ctxCfg.ctx - sysTokenEstimate - thinkingBuffer));
       // Enable thinking permanently for Qwen3 models — always on
       const isQwen3 = selectedModel.startsWith('qwen/qwen3');
       payload = {
