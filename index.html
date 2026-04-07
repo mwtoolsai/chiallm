@@ -892,8 +892,9 @@ function clearDoc() {
 function buildSystemPrompt() {
   const base = document.getElementById('system-input').value.trim();
   if (!docText) return base;
+  const criticalRules = `\n\n---\n# ⚠️ CRITICAL RULES — READ FIRST (overrides nothing, just pinned for visibility)\n\n1. SCENE RATIO (hard requirement): ~35% IMAGE / ~45% VIDEO / ~20% TALKINGHEAD. Do NOT default to IMAGE. Most scenes should be VIDEO.\n2. IMAGE narration: 8–15 words per scene (target ~12). NEVER under 8 words.\n3. VIDEO narration: max 20 words (hard limit — Veo 3.1 ~8s cap).\n4. TALKINGHEAD narration: max 20 words (hard limit). Never consecutive. Weight toward start.\n5. Pass 2 rule: Keep EVERY scene's format tag (IMAGE/VIDEO/TALKINGHEAD) exactly as set in Pass 1. Do NOT change VIDEO or TALKINGHEAD scenes to IMAGE.\n6. EVERY scene must have narration text. No exceptions.\n7. Do NOT add audio direction cues to VIDEO prompts — pipeline discards Veo 3.1 audio.\n\n---`;
   const docSection = `\n\n---\n# PRODUCTION GUIDE (Reference Document)\n\nThe following is the production guide you must follow when writing scripts. Adhere to its format, style, tone, structure, and all instructions within it.\n\n${docText}\n\n---`;
-  return base ? base + docSection : docSection;
+  return base ? base + criticalRules + docSection : criticalRules + docSection;
 }
 
 // ── Chat UI helpers ──
@@ -1247,7 +1248,7 @@ async function _continueResponse(bub, originalContent, metaEl) {
     const contMsgs = [
       { role: 'system', content: sysPrompt },
       ...messages,   // last item is { role:'assistant', content: originalContent }
-      { role: 'user', content: 'continue' }
+      { role: 'user', content: 'continue\n\nReminder: scene type ratio MUST be ~35% IMAGE / ~45% VIDEO / ~20% TALKINGHEAD — do NOT default everything to IMAGE. IMAGE narration: 8-15 words avg ~12. VIDEO narration: max 20 words. TALKINGHEAD: max 20 words. Pick the right format for each scene based on the Format Decision Matrix in the production guide.' }
     ];
     const contPayload = provider === 'moonshot'
       ? { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true, thinking: { type: 'disabled' },
