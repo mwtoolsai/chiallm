@@ -1236,7 +1236,7 @@ async function _continueResponse(bub, originalContent, metaEl) {
   try {
     let apiUrl, headers;
     if (provider === 'moonshot') {
-      apiUrl = 'https://api.moonshot.cn/v1/chat/completions';
+      apiUrl = 'https://api.moonshot.ai/v1/chat/completions';
       headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${activeKey}` };
     } else {
       apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
