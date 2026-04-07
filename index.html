@@ -1250,7 +1250,8 @@ async function _continueResponse(bub, originalContent, metaEl) {
       { role: 'user', content: 'continue' }
     ];
     const contPayload = provider === 'moonshot'
-      ? { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true, thinking: { type: 'disabled' } }
+      ? { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true, thinking: { type: 'disabled' },
+          tools: [{ type: 'builtin_function', function: { name: '$web_search' } }] }
       : { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true, stream_options: { include_usage: true } };
 
     const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(contPayload), signal: abortController?.signal });
