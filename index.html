@@ -1366,10 +1366,14 @@ function _parseSetCScenes(content) {
 }
 
 async function packageSetCZip(btn, content) {
-  const projectCode = prompt('Enter project code (e.g. AH351):', '');
-  if (!projectCode) return;
-
-  const code = projectCode.trim().toUpperCase();
+  // Auto-detect project code (e.g. AH31, AH351, FC80) from content
+  const autoMatch = content.match(/\b([A-Z]{2,4}\d{2,4})\b/);
+  let code = autoMatch ? autoMatch[1].toUpperCase() : null;
+  if (!code) {
+    const fallback = prompt('Could not detect project code. Enter manually (e.g. AH351):', '');
+    if (!fallback) return;
+    code = fallback.trim().toUpperCase();
+  }
 
   // If content has a "— continuing —" divider, use only the post-continuation section
   // (the model rewrites the full clean master there — the pre-divider has mixed Pass1/Pass2)
