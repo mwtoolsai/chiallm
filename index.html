@@ -1268,7 +1268,7 @@ async function _continueResponse(bub, originalContent, metaEl) {
           return { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true,
             stream_options: { include_usage: true },
             temperature: isQwen3cont ? 1.0 : 0.7,
-            thinking: isQwen3cont ? { type: 'enabled' } : { type: 'disabled' } };
+            ...(isQwen3cont ? { thinking: { type: 'enabled' } } : {}) };
         })();
 
     const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(contPayload), signal: abortController?.signal });
@@ -1690,17 +1690,16 @@ async function sendMessage() {
       // DeepSeek V3 = 64K ctx. Our guide alone = ~37.5K tokens, so cap output at 16K.
       const sysTokenEstimate = Math.ceil(sysPrompt.length / 4);
       const orMaxTokens = Math.min(32768, Math.max(8192, 60000 - sysTokenEstimate));
-      // Enable thinking for Qwen3 models when guide is loaded — improves instruction following
+      // Enable thinking permanently for Qwen3 models — always on
       const isQwen3 = selectedModel.startsWith('qwen/qwen3');
-      const orThinking = (docText && isQwen3) ? { type: 'enabled' } : { type: 'disabled' };
       payload = {
         model: selectedModel,
         messages: [{ role: 'system', content: sysPrompt }, ...messages],
         max_tokens: orMaxTokens,
         stream: true,
         stream_options: { include_usage: true },
-        temperature: docText && isQwen3 ? 1.0 : 0.7,  // thinking requires temp=1.0
-        thinking: orThinking,
+        temperature: isQwen3 ? 1.0 : 0.7,
+        ...(isQwen3 ? { thinking: { type: 'enabled' } } : {}),
         ...(orWebSearch.length ? { tools: orWebSearch } : {})
       };
     }
