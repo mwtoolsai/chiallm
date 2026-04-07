@@ -240,6 +240,32 @@
   #send-btn.stopping { background:#ef4444; font-size:14px; }
   #send-btn.stopping:hover { background:#dc2626; }
 
+  /* ── Active Script Tray ── */
+  #script-tray {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 720px;
+    margin: 0 auto 6px;
+    padding: 5px 10px;
+    background: #0d2b1f;
+    border: 1px solid #10b981;
+    border-radius: 8px;
+    gap: 8px;
+  }
+  #script-tray .script-label {
+    font-size: 11px; color: #10b981; font-family: monospace;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+  }
+  #script-tray .script-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  #script-tray .tray-btn {
+    background: none; border: 1px solid #10b981; color: #10b981;
+    font-size: 10px; padding: 1px 7px; border-radius: 4px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  #script-tray .tray-btn:hover { background: #10b981; color: #0a0a0a; }
+  #script-tray .tray-btn.danger { border-color: #ef4444; color: #ef4444; }
+  #script-tray .tray-btn.danger:hover { background: #ef4444; color: #fff; }
 
   /* ── Empty state ── */
   #empty-state {
@@ -472,6 +498,14 @@
 <div id="status"></div>
 
 <div id="input-area">
+  <!-- Active Script Tray: shows when a Set C script is loaded for targeted editing -->
+  <div id="script-tray">
+    <span class="script-label" id="script-tray-label">🎬 No script loaded</span>
+    <div class="script-actions">
+      <button class="tray-btn" onclick="viewActiveScript()" title="View full script">👁 View</button>
+      <button class="tray-btn danger" onclick="clearActiveScript()" title="Unload script">✕ Unload</button>
+    </div>
+  </div>
   <div id="input-row">
     <textarea id="user-input" placeholder="Type a message… (Enter to send, Shift+Enter for new line)" rows="1"></textarea>
     <div id="model-dropdown">
@@ -627,6 +661,7 @@ const HISTORY_KEY = 'chia_history';
 const MAX_HISTORY = 50;
 let currentConvId = null;
 renderHistoryPanel(); // now safe — HISTORY_KEY is defined
+_loadScriptFromStorage(); // restore active Set C script from previous session
 
 function _getHistory() {
   try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
@@ -953,15 +988,29 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
   meta.innerHTML = `
     <span class="msg-tokens">${tokenStr}</span>
     <div class="msg-actions">
+      ${isSetC  ? `<button class="msg-btn load-script-btn" title="Load as active script for targeted scene edits">🎬 Load Script</button>` : ''}
       ${isSetC  ? `<button class="msg-btn zip-btn"  title="Package as Set C ZIP">📦 Set C ZIP</button>` : ''}
       ${isLong  ? `<button class="msg-btn save-btn" title="Save as .txt">💾 Save</button>` : ''}
       <button class="msg-btn copy-btn" title="Copy to clipboard">📋 Copy</button>
     </div>`;
 
   // Store content directly on element (avoids re-querying the bubble)
+  const loadScriptBtn = meta.querySelector('.load-script-btn');
   const zipBtn  = meta.querySelector('.zip-btn');
   const saveBtn = meta.querySelector('.save-btn');
   const copyBtn = meta.querySelector('.copy-btn');
+  if (loadScriptBtn) loadScriptBtn.addEventListener('click', () => {
+    const scriptContent = content || bub.textContent || '';
+    // Guess project code from content — look for something like "FC80" near the top
+    const codeM = scriptContent.match(/([A-Z]{1,4}\d{1,4})/);
+    const guessedCode = codeM ? codeM[1] : '';
+    const code = prompt('Enter project code for this script (e.g. FC80):', guessedCode || '');
+    if (code === null) return; // cancelled
+    loadActiveScript(scriptContent, code.trim().toUpperCase() || 'SCRIPT');
+    loadScriptBtn.textContent = '✓ Loaded';
+    loadScriptBtn.classList.add('copied');
+    setTimeout(() => { loadScriptBtn.textContent = '🎬 Load Script'; loadScriptBtn.classList.remove('copied'); }, 2500);
+  });
   if (zipBtn)  zipBtn.addEventListener('click',  () => packageSetCZip(zipBtn, content || bub.textContent || ''));
   if (copyBtn) copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(content || bub.textContent || '').then(() => {
@@ -1038,6 +1087,119 @@ async function checkFreeModelStatuses() {
   }));
 }
 
+// ── Active Script (Scene Editor) ──
+// Stores the full Set C script in localStorage for targeted scene edits
+const SCRIPT_STORAGE_KEY = 'chia_active_script';
+let activeScript = null; // { content, code, sceneCount }
+
+function _loadScriptFromStorage() {
+  try {
+    const raw = localStorage.getItem(SCRIPT_STORAGE_KEY);
+    if (raw) activeScript = JSON.parse(raw);
+    if (activeScript) _updateScriptTray();
+  } catch(e) { activeScript = null; }
+}
+
+function _updateScriptTray() {
+  const tray  = document.getElementById('script-tray');
+  const label = document.getElementById('script-tray-label');
+  if (!tray || !label) return;
+  if (activeScript) {
+    label.textContent = `🎬 Active: ${activeScript.code || 'script'} · ${activeScript.sceneCount} scenes`;
+    tray.style.display = 'flex';
+  } else {
+    tray.style.display = 'none';
+  }
+}
+
+function loadActiveScript(content, codeHint) {
+  // Count scenes by finding the highest SCENE number
+  const nums = [...content.matchAll(/\[SCENE\s+(\d+):/gi)].map(m => parseInt(m[1]));
+  const sceneCount = nums.length ? Math.max(...nums) : 0;
+  const code = codeHint || 'script';
+  activeScript = { content, code, sceneCount };
+  try { localStorage.setItem(SCRIPT_STORAGE_KEY, JSON.stringify(activeScript)); } catch(e) {}
+  _updateScriptTray();
+  setStatus(`✓ Loaded "${code}" · ${sceneCount} scenes ready for targeted edits`, 'ok');
+  setTimeout(() => setStatus(''), 3000);
+}
+
+function clearActiveScript() {
+  activeScript = null;
+  try { localStorage.removeItem(SCRIPT_STORAGE_KEY); } catch(e) {}
+  _updateScriptTray();
+}
+
+function viewActiveScript() {
+  if (!activeScript) return;
+  // Show in a new window / blob URL so user can read/copy full script
+  const blob = new Blob([activeScript.content], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `${activeScript.code || 'script'}-active.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Scene block extraction & splice ──
+// Extract all lines belonging to a given scene number from the full Set C script.
+// A scene block = lines from "SCENE N" header (or first [SCENE N:] marker)
+// up to (but not including) the next "SCENE" header or end of content.
+function _extractSceneBlock(content, sceneNum) {
+  const lines = content.split('
+');
+  const result = [];
+  let inScene = false;
+  const headerRe = new RegExp(`^\s*(?:SCENE\s+${sceneNum}\b|\[SCENE\s+${sceneNum}\s*:)`, 'i');
+  const nextSceneRe = /^\s*(?:SCENE\s+\d+|\[SCENE\s+\d+\s*:)/i;
+
+  for (const line of lines) {
+    if (!inScene) {
+      if (headerRe.test(line)) { inScene = true; result.push(line); }
+    } else {
+      // Stop when we hit a different scene header
+      if (nextSceneRe.test(line) && !headerRe.test(line)) break;
+      result.push(line);
+    }
+  }
+  return result.join('
+').trim();
+}
+
+// Splice replacement block back into the full content for a given scene number.
+// Replaces everything from the scene's first line to the line before the next scene.
+function _spliceSceneBack(content, sceneNum, replacement) {
+  const lines = content.split('
+');
+  const headerRe = new RegExp(`^\s*(?:SCENE\s+${sceneNum}\b|\[SCENE\s+${sceneNum}\s*:)`, 'i');
+  const nextSceneRe = /^\s*(?:SCENE\s+\d+|\[SCENE\s+\d+\s*:)/i;
+
+  let startIdx = -1, endIdx = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    if (startIdx === -1 && headerRe.test(lines[i])) { startIdx = i; continue; }
+    if (startIdx !== -1 && nextSceneRe.test(lines[i]) && !headerRe.test(lines[i])) { endIdx = i; break; }
+  }
+  if (startIdx === -1) return content; // scene not found — return unchanged
+
+  const before = lines.slice(0, startIdx).join('
+');
+  const after  = lines.slice(endIdx).join('
+');
+  return (before ? before + '
+' : '') + replacement.trim() + (after ? '
+' + after : '');
+}
+
+// Detect if user message is a targeted scene edit request.
+// Returns scene number (int) or null.
+function _detectSceneEditRequest(text) {
+  if (!activeScript) return null;
+  // Patterns: "scene 61", "fix scene 61", "scene 61 is missing...", etc.
+  const m = text.match(/scene\s+(\d+)/i);
+  return m ? parseInt(m[1]) : null;
+}
+
 // ── Set C ZIP packaging ──
 function _isSetCFormat(content) {
   // Detect Set C output: must have at least 3 [SCENE N: IMAGE/VIDEO/TH: ...] markers
@@ -1096,11 +1258,179 @@ async function packageSetCZip(btn, content) {
   setTimeout(() => { btn.textContent = '📦 Set C ZIP'; btn.classList.remove('copied'); }, 3000);
 }
 
+// ── Scene Edit Request ──
+// Called when user message references a scene number and activeScript is loaded.
+// Sends ONLY that scene block to the model with the fix instruction, then splices
+// the corrected scene back into the full script and saves it.
+async function _sendSceneEditRequest(userText, sceneNum) {
+  const provider = document.querySelector(`.mdl-item[data-value="${selectedModel}"]`)?.dataset?.provider || 'openrouter';
+  const activeKey = provider === 'moonshot' ? moonshotKey : openrouterKey;
+  if (!activeKey) {
+    document.getElementById('key-prompt').classList.add('show');
+    return;
+  }
+
+  const sceneBlock = _extractSceneBlock(activeScript.content, sceneNum);
+  if (!sceneBlock) {
+    // Scene not found — fall through to normal send
+    addMessage('assistant', `⚠️ Scene ${sceneNum} not found in the active script (${activeScript.code}). Check the scene number and try again.`);
+    return;
+  }
+
+  inputEl.value = ''; inputEl.style.height = 'auto';
+  isLoading = true;
+  abortController = new AbortController();
+  sendBtn.textContent = '■';
+  sendBtn.classList.add('stopping');
+  sendBtn.disabled = false;
+  sendBtn.onclick = stopGeneration;
+
+  messages.push({ role: 'user', content: userText });
+  addMessage('user', userText);
+  addTyping();
+  setStatus(`🎬 Scene ${sceneNum} edit — sending targeted request…`, 'active');
+
+  // Build the targeted prompt
+  const editPrompt = [
+    `You are editing a single scene from a Set C production script stored as active script "${activeScript.code}".`,
+    `The user's instruction: "${userText}"`,
+    ``,
+    `Here is the CURRENT content of Scene ${sceneNum}:`,
+    `---`,
+    sceneBlock,
+    `---`,
+    ``,
+    `Return ONLY the corrected Scene ${sceneNum} block in the exact same Set C format.`,
+    `Do NOT include any other scenes, introductions, or commentary — ONLY the fixed scene block.`
+  ].join('
+');
+
+  let apiUrl, headers, payload;
+  if (provider === 'moonshot') {
+    apiUrl = 'https://api.moonshot.ai/v1/chat/completions';
+    headers = { 'Authorization': 'Bearer ' + activeKey, 'Content-Type': 'application/json' };
+    payload = {
+      model: selectedModel,
+      messages: [{ role: 'user', content: editPrompt }],
+      max_tokens: 4096,
+      stream: true,
+      thinking: { type: 'disabled' }
+    };
+  } else {
+    apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    headers = {
+      'Authorization': 'Bearer ' + activeKey,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://chiallm.app',
+      'X-Title': 'Chia LLM'
+    };
+    payload = {
+      model: selectedModel,
+      messages: [{ role: 'user', content: editPrompt }],
+      max_tokens: 4096,
+      stream: true,
+      stream_options: { include_usage: true }
+    };
+  }
+
+  let full = '';
+  let bubble = null;
+  let usageData = null;
+
+  try {
+    const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(payload), signal: abortController?.signal });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+
+    removeTyping();
+    bubble = addMessage('assistant', '');
+    _userScrolledUp = false; // reset so scroll tracks output
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('
+');
+      buffer = parts.pop();
+      for (const raw of parts) {
+        const line = raw.trim();
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const j = JSON.parse(data);
+          const delta = j.choices?.[0]?.delta?.content || '';
+          if (delta) { full += delta; _appendDelta(bubble, delta); }
+          if (j.usage) usageData = j.usage;
+        } catch {}
+      }
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      if (bubble && full.trim()) {
+        bubble.textContent += ' ▪';
+        // Don't splice partial on abort — just show what came back
+      }
+      setStatus('⏹ Stopped', '');
+    } else {
+      removeTyping();
+      addMessage('assistant', `⚠️ Scene edit error: ${err.message}`);
+      setStatus('Error', 'error');
+    }
+    _resetSendBtn();
+    isLoading = false;
+    return;
+  }
+
+  // ── Splice corrected scene back into the active script ──
+  if (full.trim()) {
+    const updatedContent = _spliceSceneBack(activeScript.content, sceneNum, full.trim());
+    const oldCount = activeScript.sceneCount;
+    activeScript = { ...activeScript, content: updatedContent };
+    try { localStorage.setItem(SCRIPT_STORAGE_KEY, JSON.stringify(activeScript)); } catch(e) {}
+    _updateScriptTray();
+
+    // Show success indicator under the bubble
+    setStatus(`✓ Scene ${sceneNum} updated in "${activeScript.code}" · save ZIP to export`, 'ok');
+    setTimeout(() => setStatus(''), 4000);
+  }
+
+  // Save the scene edit exchange to conversation history
+  messages.push({ role: 'assistant', content: full });
+  saveCurrentConversation();
+
+  const promptTokens     = usageData?.prompt_tokens     || 0;
+  const completionTokens = usageData?.completion_tokens || 0;
+  addMessageMeta(bubble, { promptTokens, completionTokens, model: selectedModel, content: full });
+
+  _resetSendBtn();
+  isLoading = false;
+}
+
 // ── Streaming render helpers ──
 // Append incrementally instead of rewriting full text (O(1) vs O(n) per token)
-let _scrollPending = false;
+// Auto-scroll pauses when user manually scrolls up; resumes when back at bottom.
+let _scrollPending  = false;
+let _userScrolledUp = false;
+
+// Detect user scrolling up and pause auto-scroll
+chatEl.addEventListener('scroll', () => {
+  const distFromBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
+  // If user is >60px from bottom, they intentionally scrolled up — pause auto-scroll
+  if (distFromBottom > 60) {
+    _userScrolledUp = true;
+  } else {
+    // Back at the bottom — resume auto-scroll
+    _userScrolledUp = false;
+  }
+}, { passive: true });
+
 function _scheduleScroll() {
-  if (_scrollPending) return;
+  if (_scrollPending || _userScrolledUp) return;
   _scrollPending = true;
   requestAnimationFrame(() => { chatEl.scrollTop = chatEl.scrollHeight; _scrollPending = false; });
 }
@@ -1112,10 +1442,30 @@ function _clearBubble(bubble) {
   bubble.textContent = '';
 }
 
+// ── Reset send button after completion/abort ──
+function _resetSendBtn() {
+  isLoading = false;
+  abortController = null;
+  sendBtn.textContent = '➤';
+  sendBtn.classList.remove('stopping');
+  sendBtn.disabled = false;
+  sendBtn.onclick = sendMessage;
+  inputEl.focus();
+}
+
 // ── Send message ──
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text || isLoading) return;
+
+  // ── Targeted scene edit shortcut ──
+  // If an active Set C script is loaded and the message mentions a scene number,
+  // route it through the scene editor instead of sending the full conversation.
+  const sceneEditNum = _detectSceneEditRequest(text);
+  if (sceneEditNum !== null) {
+    await _sendSceneEditRequest(text, sceneEditNum);
+    return;
+  }
 
   const provider = document.querySelector(`.mdl-item[data-value="${selectedModel}"]`)?.dataset?.provider || 'openrouter';
   const activeKey = provider === 'moonshot' ? moonshotKey : openrouterKey;
@@ -1136,6 +1486,7 @@ async function sendMessage() {
   sendBtn.disabled = false;
   sendBtn.onclick = stopGeneration;
 
+  _userScrolledUp = false; // reset scroll lock for new response
   messages.push({ role: 'user', content: text });
   addMessage('user', text);
   addTyping();
@@ -1436,13 +1787,7 @@ async function sendMessage() {
     }
   }
 
-  isLoading = false;
-  abortController = null;
-  sendBtn.textContent = '➤';
-  sendBtn.classList.remove('stopping');
-  sendBtn.disabled = false;
-  sendBtn.onclick = sendMessage;
-  inputEl.focus();
+  _resetSendBtn();
 }
 </script>
 </body>
