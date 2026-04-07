@@ -1147,48 +1147,39 @@ function viewActiveScript() {
 // A scene block = lines from "SCENE N" header (or first [SCENE N:] marker)
 // up to (but not including) the next "SCENE" header or end of content.
 function _extractSceneBlock(content, sceneNum) {
-  const lines = content.split('
-');
+  const lines = content.split('\n');
   const result = [];
   let inScene = false;
-  const headerRe = new RegExp(`^\s*(?:SCENE\s+${sceneNum}\b|\[SCENE\s+${sceneNum}\s*:)`, 'i');
-  const nextSceneRe = /^\s*(?:SCENE\s+\d+|\[SCENE\s+\d+\s*:)/i;
+  const headerRe = new RegExp('^\\s*(?:SCENE\\s+' + sceneNum + '\\b|\\[SCENE\\s+' + sceneNum + '\\s*:)', 'i');
+  const nextSceneRe = /^\s*(?:SCENE\s+\d+\b|\[SCENE\s+\d+\s*:)/i;
 
   for (const line of lines) {
     if (!inScene) {
       if (headerRe.test(line)) { inScene = true; result.push(line); }
     } else {
-      // Stop when we hit a different scene header
       if (nextSceneRe.test(line) && !headerRe.test(line)) break;
       result.push(line);
     }
   }
-  return result.join('
-').trim();
+  return result.join('\n').trim();
 }
 
 // Splice replacement block back into the full content for a given scene number.
-// Replaces everything from the scene's first line to the line before the next scene.
 function _spliceSceneBack(content, sceneNum, replacement) {
-  const lines = content.split('
-');
-  const headerRe = new RegExp(`^\s*(?:SCENE\s+${sceneNum}\b|\[SCENE\s+${sceneNum}\s*:)`, 'i');
-  const nextSceneRe = /^\s*(?:SCENE\s+\d+|\[SCENE\s+\d+\s*:)/i;
+  const lines = content.split('\n');
+  const headerRe = new RegExp('^\\s*(?:SCENE\\s+' + sceneNum + '\\b|\\[SCENE\\s+' + sceneNum + '\\s*:)', 'i');
+  const nextSceneRe = /^\s*(?:SCENE\s+\d+\b|\[SCENE\s+\d+\s*:)/i;
 
   let startIdx = -1, endIdx = lines.length;
   for (let i = 0; i < lines.length; i++) {
     if (startIdx === -1 && headerRe.test(lines[i])) { startIdx = i; continue; }
     if (startIdx !== -1 && nextSceneRe.test(lines[i]) && !headerRe.test(lines[i])) { endIdx = i; break; }
   }
-  if (startIdx === -1) return content; // scene not found — return unchanged
+  if (startIdx === -1) return content;
 
-  const before = lines.slice(0, startIdx).join('
-');
-  const after  = lines.slice(endIdx).join('
-');
-  return (before ? before + '
-' : '') + replacement.trim() + (after ? '
-' + after : '');
+  const before = lines.slice(0, startIdx).join('\n');
+  const after  = lines.slice(endIdx).join('\n');
+  return (before ? before + '\n' : '') + replacement.trim() + (after ? '\n' + after : '');
 }
 
 // Detect if user message is a targeted scene edit request.
@@ -1213,7 +1204,7 @@ function _parseSetCScenes(content) {
   // Match full [SCENE N: TYPE: prompt] lines — each is on one line
   const re = /^\[SCENE\s+(\d+):\s*(IMAGE|VIDEO|TH):\s*(.+?)\].*$/im;
   for (const line of content.split('\n')) {
-    const m = line.match(/^\[SCENE\s+(\d+):\s*(IMAGE|VIDEO|TH):\s*(.+?)\]/i);
+    const m = line.match(/^\[SCENE\s+(\d+):\s*(IMAGE|VIDEO|TH):\s*(.+)\]\s*$/i);
     if (!m) continue;
     const num = m[1], type = m[2].toUpperCase(), prompt = m[3].trim();
     if (type === 'IMAGE') imagePrompts.push(`${num}. ${prompt}`);
@@ -1229,11 +1220,16 @@ async function packageSetCZip(btn, content) {
   const code = projectCode.trim().toUpperCase();
   const { imagePrompts, videoPrompts } = _parseSetCScenes(content);
 
+  // Strip preamble fluff (anything before the first SCENE line) from the scenes file
+  const scenesLines = content.split('\n');
+  const firstSceneIdx = scenesLines.findIndex(l => /^\s*(?:SCENE\s+\d+\b|\[SCENE\s+\d+\s*:)/i.test(l));
+  const cleanContent = firstSceneIdx > 0 ? scenesLines.slice(firstSceneIdx).join('\n') : content;
+
   const zip = new JSZip();
   const folder = zip.folder(code);
 
-  // 1. Full scenes file
-  folder.file(`${code}-scenes.txt`, content);
+  // 1. Full scenes file (preamble stripped)
+  folder.file(`${code}-scenes.txt`, cleanContent);
 
   // 2. Image prompts file
   if (imagePrompts.length) {
@@ -1302,8 +1298,7 @@ async function _sendSceneEditRequest(userText, sceneNum) {
     ``,
     `Return ONLY the corrected Scene ${sceneNum} block in the exact same Set C format.`,
     `Do NOT include any other scenes, introductions, or commentary — ONLY the fixed scene block.`
-  ].join('
-');
+  ].join('\n');
 
   let apiUrl, headers, payload;
   if (provider === 'moonshot') {
@@ -1353,8 +1348,7 @@ async function _sendSceneEditRequest(userText, sceneNum) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split('
-');
+      const parts = buffer.split('\n');
       buffer = parts.pop();
       for (const raw of parts) {
         const line = raw.trim();
