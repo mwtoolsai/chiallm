@@ -532,6 +532,8 @@
         <div class="mdl-group" style="margin-top:4px">💳 OpenRouter Paid · web search</div>
         <div class="mdl-item" data-value="deepseek/deepseek-v3.2" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-v3.2"></span><span class="mdl-name">⭐ DeepSeek V3.2 · 128K · ~$0.35/M</span></div>
         <div class="mdl-item" data-value="deepseek/deepseek-chat" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-chat"></span><span class="mdl-name">DeepSeek V3 · 64K · ~$0.27/M</span></div>
+        <div class="mdl-item" data-value="z-ai/glm-5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="z-ai/glm-5"></span><span class="mdl-name">GLM-5 · 745B · 128K · ~$0.72/M</span></div>
+        <div class="mdl-item" data-value="z-ai/glm-5-turbo" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="z-ai/glm-5-turbo"></span><span class="mdl-name">GLM-5 Turbo · 128K · cheaper</span></div>
         <div class="mdl-item" data-value="moonshotai/kimi-k2.5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="moonshotai/kimi-k2.5"></span><span class="mdl-name">Kimi K2.5 · 262K · ~$0.25</span></div>
         <div class="mdl-item" data-value="meta-llama/llama-3.3-70b-instruct" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="meta-llama/llama-3.3-70b-instruct"></span><span class="mdl-name">Llama 3.3 70B · 128K · ~$0.30</span></div>
         <div class="mdl-item" data-value="perplexity/sonar-pro-search" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="perplexity/sonar-pro-search"></span><span class="mdl-name">Perplexity Sonar Pro · 200K</span></div>
@@ -960,6 +962,8 @@ const MODEL_COSTS = {
   'kimi-k2.5':                           { in: 0.14,  out: 0.14  },  // Moonshot direct, thinking off
   'deepseek/deepseek-chat':              { in: 0.27,  out: 1.10  },  // DeepSeek V3 via OpenRouter
   'deepseek/deepseek-v3.2':             { in: 0.35,  out: 0.88  },  // DeepSeek V3.2 via OpenRouter
+  'z-ai/glm-5':                         { in: 0.72,  out: 2.30  },  // GLM-5 745B via OpenRouter
+  'z-ai/glm-5-turbo':                   { in: 0.20,  out: 0.60  },  // GLM-5 Turbo via OpenRouter
   'moonshotai/kimi-k2.5':                { in: 0.15,  out: 0.15  },  // via OpenRouter
   'meta-llama/llama-3.3-70b-instruct':   { in: 0.06,  out: 0.12  },
   'perplexity/sonar-pro-search':         { in: 3.0,   out: 15.0  },
