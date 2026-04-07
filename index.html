@@ -1011,9 +1011,12 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
   const isSetC = _isSetCFormat(content);
   // Detect when model asked for continuation (e.g. Kimi says "please say **continue**")
   const contRequested = /please\s+say\s+\*{0,2}continue\*{0,2}|say\s+\*{0,2}continue\*{0,2}\s*(?:and|to)/i.test((content||'').slice(-1000));
+  // Detect topic warning response — model flagged an issue and offered options
+  const isWarning = /option\s+[ABC]|CRITICAL.*(?:WARNING|TOPIC)|DO YOU WANT ME TO/i.test(content||'');
   meta.innerHTML = `
     <span class="msg-tokens">${tokenStr}</span>
     <div class="msg-actions">
+      ${isWarning ? `<button class="msg-btn write-now-btn" title="Clear this warning and write the script fresh — no context baggage" style="border-color:#f59e0b!important;color:#f59e0b!important;">✍️ Write Now</button>` : ''}
       ${isSetC  ? `<button class="msg-btn load-script-btn" title="Load as active script for targeted scene edits">🎬 Load Script</button>` : ''}
       ${isSetC  ? `<button class="msg-btn zip-btn"  title="Package as Set C ZIP">📦 Set C ZIP</button>` : ''}
       ${isLong  ? `<button class="msg-btn save-btn" title="Save as .txt">💾 Save</button>` : ''}
@@ -1048,6 +1051,26 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
   });
   const contBtn = meta.querySelector('.cont-btn');
   if (contBtn) contBtn.addEventListener('click', () => _continueResponse(bub, content || bub.textContent || '', meta));
+  const writeNowBtn = meta.querySelector('.write-now-btn');
+  if (writeNowBtn) writeNowBtn.addEventListener('click', () => {
+    // Find the original Set C prompt from message history
+    let originalPrompt = null;
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].role === 'user' && /set\s+c\s+/i.test(messages[i].content)) {
+        originalPrompt = messages[i].content;
+        break;
+      }
+    }
+    if (!originalPrompt) { alert('Could not find original Set C prompt in history.'); return; }
+    // Clear conversation — fresh context, no warning baggage
+    messages = [];
+    chatEl.innerHTML = '';
+    chatEl.appendChild(emptyState);
+    emptyState.style.display = 'none';
+    // Fire the original prompt fresh
+    inputEl.value = originalPrompt;
+    sendMessage();
+  });
   if (saveBtn) saveBtn.addEventListener('click', () => {
     const text = content || bub.textContent || '';
     const blob = new Blob([text], { type: 'text/plain' });
