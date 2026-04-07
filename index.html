@@ -530,11 +530,13 @@
         <div class="mdl-item" data-value="arcee-ai/trinity-large-preview:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="arcee-ai/trinity-large-preview:free"></span><span class="mdl-name">Arcee Trinity · 131K</span></div>
         <div class="mdl-item" data-value="stepfun/step-3.5-flash:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="stepfun/step-3.5-flash:free"></span><span class="mdl-name">StepFun 3.5 Flash · 256K</span></div>
         <div class="mdl-group" style="margin-top:4px">💳 OpenRouter Paid · web search</div>
+        <div class="mdl-item" data-value="deepseek/deepseek-chat" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-chat"></span><span class="mdl-name">⭐ DeepSeek V3 · 64K · ~$0.27/M</span></div>
         <div class="mdl-item" data-value="moonshotai/kimi-k2.5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="moonshotai/kimi-k2.5"></span><span class="mdl-name">Kimi K2.5 · 262K · ~$0.25</span></div>
         <div class="mdl-item" data-value="meta-llama/llama-3.3-70b-instruct" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="meta-llama/llama-3.3-70b-instruct"></span><span class="mdl-name">Llama 3.3 70B · 128K · ~$0.30</span></div>
         <div class="mdl-item" data-value="perplexity/sonar-pro-search" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="perplexity/sonar-pro-search"></span><span class="mdl-name">Perplexity Sonar Pro · 200K</span></div>
         <div class="mdl-item" data-value="google/gemini-2.5-pro" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="google/gemini-2.5-pro"></span><span class="mdl-name">Gemini 2.5 Pro · 1M · ~$1.50</span></div>
-        <div class="mdl-item" data-value="anthropic/claude-sonnet-4-5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="anthropic/claude-sonnet-4-5"></span><span class="mdl-name">Claude Sonnet · 1M · ~$1.80</span></div>
+        <div class="mdl-item" data-value="anthropic/claude-sonnet-4-5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="anthropic/claude-sonnet-4-5"></span><span class="mdl-name">Claude Sonnet 4.5 · 1M · ~$1.80</span></div>
+        <div class="mdl-item" data-value="anthropic/claude-opus-4-5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="anthropic/claude-opus-4-5"></span><span class="mdl-name">Claude Opus 4.5 · 1M · ~$7.50</span></div>
       </div>
     </div>
     <button id="send-btn" onclick="sendMessage()">➤</button>
@@ -955,6 +957,7 @@ function removeTyping() { const t = document.getElementById('typing-msg'); if (t
 // ── Token cost table (per 1M tokens, input / output) ──
 const MODEL_COSTS = {
   'kimi-k2.5':                           { in: 0.14,  out: 0.14  },  // Moonshot direct, thinking off
+  'deepseek/deepseek-chat':              { in: 0.27,  out: 1.10  },  // DeepSeek V3 via OpenRouter
   'moonshotai/kimi-k2.5':                { in: 0.15,  out: 0.15  },  // via OpenRouter
   'meta-llama/llama-3.3-70b-instruct':   { in: 0.06,  out: 0.12  },
   'perplexity/sonar-pro-search':         { in: 3.0,   out: 15.0  },
