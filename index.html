@@ -526,7 +526,7 @@ const emptyState = document.getElementById('empty-state');
 const inputEl    = document.getElementById('user-input');
 const sendBtn    = document.getElementById('send-btn');
 const statusEl   = document.getElementById('status');
-const docBar     = document.getElementById('doc-bar');
+const docBar     = null; // doc-bar element removed — kept as null to avoid errors
 
 // ── Custom model dropdown state ──
 let selectedModel = 'kimi-k2.5';
@@ -593,6 +593,9 @@ function loadSavedDoc() {
 
 loadSavedKey();
 loadSavedDoc();
+// Check free model availability after a short delay (keys need to be loaded first)
+setTimeout(checkFreeModelStatuses, 1500);
+setInterval(checkFreeModelStatuses, 3 * 60 * 1000); // re-check every 3 min
 
 // ── Textarea auto-resize ──
 inputEl.addEventListener('input', () => {
@@ -761,7 +764,6 @@ async function handleDocUpload(event) {
   if (!file) return;
   event.target.value = '';
   docLoading.style.display = 'flex';
-  docBar.style.display = 'none';
   document.getElementById('doc-loading-text').textContent = `Reading ${file.name}…`;
   try {
     const ext = file.name.split('.').pop().toLowerCase();
@@ -797,8 +799,10 @@ async function extractPdfText(file) {
   if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js not loaded');
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const loadingText = document.getElementById('doc-loading-text');
   let text = '';
   for (let i = 1; i <= pdf.numPages; i++) {
+    if (loadingText) loadingText.textContent = `Reading page ${i} of ${pdf.numPages}…`;
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     text += content.items.map(x => x.str).join(' ') + '\n';
@@ -974,6 +978,59 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
   bubWrap.appendChild(meta);
 }
 
+// ── Free model status dots ──
+// Only check free OpenRouter models (paid models keep static gray dot)
+const FREE_MODEL_IDS = [
+  'qwen/qwen3.6-plus:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'minimax/minimax-m2.5:free',
+  'nvidia/nemotron-3-nano-30b-a3b:free',
+  'arcee-ai/trinity-large-preview:free',
+  'stepfun/step-3.5-flash:free'
+];
+
+function _setDot(modelId, status) {
+  // Update dot in dropdown
+  const dot = document.querySelector(`.mdl-dot[data-dot="${modelId}"]`);
+  if (dot) dot.className = `mdl-dot ${status}`;
+  // Update button dot if this is the selected model
+  if (selectedModel === modelId) {
+    const btnDot = document.getElementById('btn-dot');
+    if (btnDot) btnDot.className = `mdl-dot ${status}`;
+  }
+}
+
+async function _pingModel(modelId) {
+  if (!openrouterKey) return 'gray';
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + openrouterKey,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://chiallm.app',
+        'X-Title': 'Chia LLM'
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 1
+      })
+    });
+    return resp.status === 429 ? 'red' : (resp.ok ? 'green' : 'red');
+  } catch { return 'gray'; }
+}
+
+async function checkFreeModelStatuses() {
+  if (!openrouterKey) return;
+  // Check all free models in parallel
+  await Promise.all(FREE_MODEL_IDS.map(async (id) => {
+    _setDot(id, 'testing');
+    const status = await _pingModel(id);
+    _setDot(id, status);
+  }));
+}
+
 // ── Set C ZIP packaging ──
 function _isSetCFormat(content) {
   // Detect Set C output: must have at least 3 [SCENE N: IMAGE/VIDEO/TH: ...] markers
@@ -1030,6 +1087,22 @@ async function packageSetCZip(btn, content) {
   btn.textContent = '✓ Downloaded';
   btn.classList.add('copied');
   setTimeout(() => { btn.textContent = '📦 Set C ZIP'; btn.classList.remove('copied'); }, 3000);
+}
+
+// ── Streaming render helpers ──
+// Append incrementally instead of rewriting full text (O(1) vs O(n) per token)
+let _scrollPending = false;
+function _scheduleScroll() {
+  if (_scrollPending) return;
+  _scrollPending = true;
+  requestAnimationFrame(() => { chatEl.scrollTop = chatEl.scrollHeight; _scrollPending = false; });
+}
+function _appendDelta(bubble, delta) {
+  bubble.appendChild(document.createTextNode(delta));
+  _scheduleScroll();
+}
+function _clearBubble(bubble) {
+  bubble.textContent = '';
 }
 
 // ── Send message ──
@@ -1154,11 +1227,10 @@ async function sendMessage() {
 
               const delta = choice.delta?.content || '';
               if (delta) {
-                if (full === '' && bubble.textContent.startsWith('🔍')) bubble.textContent = '';
+                if (full === '' && bubble.textContent.startsWith('🔍')) _clearBubble(bubble);
                 full += delta;
                 assistantContent += delta;
-                bubble.textContent = full;
-                chatEl.scrollTop = chatEl.scrollHeight;
+                _appendDelta(bubble, delta);
               }
             } catch {}
           }
@@ -1237,10 +1309,9 @@ async function sendMessage() {
             }
             const delta = choice.delta?.content || '';
             if (delta) {
-              if (full === '' && bubble.textContent.startsWith('🔍')) bubble.textContent = '';
+              if (full === '' && bubble.textContent.startsWith('🔍')) _clearBubble(bubble);
               full += delta;
-              bubble.textContent = full;
-              chatEl.scrollTop = chatEl.scrollHeight;
+              _appendDelta(bubble, delta);
             }
           } catch {}
         }
@@ -1252,7 +1323,9 @@ async function sendMessage() {
     let contAttempts = 0;
     while (outerFinishReason === 'length' && full.trim() && contAttempts < 6) {
       contAttempts++;
-      bubble.textContent = full + '\n\n⏳ Continuing…';
+      // Append continuation indicator as a removable text node
+      const contIndicatorNode = document.createTextNode('\n\n⏳ Continuing…');
+      bubble.appendChild(contIndicatorNode);
 
       // Build continuation payload — partial response + silent "continue" for context
       const contMsgs = [
@@ -1294,22 +1367,25 @@ async function sendMessage() {
             if (ch.finish_reason) contFinish = ch.finish_reason;
             const d = ch.delta?.content || '';
             if (d) {
+              if (contDelta === '') {
+                // First delta of continuation — remove the ⏳ indicator node and start appending
+                if (contIndicatorNode.parentNode) bubble.removeChild(contIndicatorNode);
+              }
               contDelta += d;
-              bubble.textContent = full.replace(/\n\n⏳ Continuing…$/, '') + contDelta;
-              chatEl.scrollTop = chatEl.scrollHeight;
+              _appendDelta(bubble, d);
             }
           } catch {}
         }
       }
 
-      // Strip the indicator and append new content
-      full = full.replace(/\n\n⏳ Continuing…$/, '') + contDelta;
-      bubble.textContent = full;
+      // Remove indicator if no content came (e.g. error)
+      if (contIndicatorNode.parentNode) bubble.removeChild(contIndicatorNode);
+      full = full + contDelta;
       outerFinishReason = contFinish;
     }
 
     // Only save real content — never save search indicator text as assistant message
-    if (!full && bubble && !bubble.textContent.startsWith('🔍')) full = bubble.textContent;
+    if (!full && bubble && !bubble.textContent.startsWith('🔍')) full = bubble.textContent.trim();
     if (full) {
       messages.push({ role: 'assistant', content: full });
       saveCurrentConversation();
