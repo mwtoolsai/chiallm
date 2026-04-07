@@ -1642,13 +1642,17 @@ async function sendMessage() {
       headers = { 'Authorization': 'Bearer ' + activeKey, 'Content-Type': 'application/json' };
       // Filter corrupt assistant messages (e.g. "🔍 Searching…" saved from broken prior attempts)
       const cleanMsgs = messages.filter(m => !(m.role === 'assistant' && !m.content?.trim()));
+      // Only include $web_search when no production guide is loaded.
+      // When a guide is active (Set C / script mode) the model must write from knowledge —
+      // leaving the tool in causes an infinite search loop instead of writing.
+      const moonshotTools = docText ? [] : [{ type: 'builtin_function', function: { name: '$web_search' } }];
       payload = {
         model: selectedModel,
         messages: [{ role: 'system', content: sysPrompt }, ...cleanMsgs],
         max_tokens: 32768,
         stream: true,
-        thinking: { type: 'disabled' },   // kimi-k2.5 thinking mode is incompatible with $web_search
-        tools: [{ type: 'builtin_function', function: { name: '$web_search' } }]
+        thinking: { type: 'disabled' },
+        ...(moonshotTools.length ? { tools: moonshotTools } : {})
       };
     } else {
       apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
