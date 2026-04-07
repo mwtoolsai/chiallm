@@ -105,7 +105,8 @@
   #key-settings-btn:hover { background: #333; color: #e5e5e5; }
   #load-doc-btn { border-color: #10b98140; color: #10b981; }
   #load-doc-btn:hover { background: #10b98120; border-color: #10b981; }
-  #load-doc-btn.loaded { background: #10b98120; border-color: #10b981; }
+  #load-doc-btn.loaded { background: #10b981; border-color: #10b981; color: #fff; font-weight: 600; }
+  #load-doc-btn.loaded:hover { background: #0d9e6e; border-color: #0d9e6e; }
 
   /* ── System prompt panel ── */
   #system-panel {
@@ -151,26 +152,7 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── Document context bar ── */
-  #doc-bar {
-    display: none;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 16px;
-    background: #0d1f16;
-    border-bottom: 1px solid #10b98130;
-    flex-shrink: 0;
-    font-size: 12px;
-  }
-  #doc-bar .doc-name { font-weight: 600; color: #10b981; }
-  #doc-bar .doc-tokens { color: #6ee7b780; margin-left: 4px; }
-  #doc-bar .doc-note { color: #6ee7b750; font-size: 11px; margin-left: auto; }
-  #doc-bar .doc-clear {
-    background: none; border: 1px solid #10b98140; color: #6ee7b7;
-    padding: 3px 10px; border-radius: 5px; font-size: 11px; cursor: pointer;
-    flex-shrink: 0;
-  }
-  #doc-bar .doc-clear:hover { background: #10b98120; }
+  /* doc-bar removed — guide status shown via button colour */
 
   /* ── Chat area ── */
   #chat {
@@ -318,6 +300,23 @@
     padding-left: 3px;
     margin-top: 2px;
   }
+  /* ── Message meta bar (tokens · cost · copy · save) ── */
+  .msg-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 3px 4px 0; gap: 8px; min-height: 20px;
+  }
+  .msg-tokens {
+    font-size: 10px; color: #3a3a3a; font-family: monospace; line-height: 1.4;
+    user-select: none;
+  }
+  .msg-actions { display: flex; gap: 3px; }
+  .msg-btn {
+    background: none; border: 1px solid #2a2a2a; cursor: pointer;
+    font-size: 11px; padding: 1px 7px; border-radius: 4px;
+    color: #555; transition: all 0.15s; white-space: nowrap;
+  }
+  .msg-btn:hover { background: #252525; color: #ccc; border-color: #3a3a3a; }
+  .msg-btn.copied { color: #10b981; border-color: #10b981; }
   ::-webkit-scrollbar { width:6px; }
   ::-webkit-scrollbar-track { background:transparent; }
   ::-webkit-scrollbar-thumb { background:#333; border-radius:3px; }
@@ -452,13 +451,7 @@
   <span id="doc-loading-text">Reading document…</span>
 </div>
 
-<div id="doc-bar">
-  <span>📘</span>
-  <span class="doc-name" id="doc-name"></span>
-  <span class="doc-tokens" id="doc-tokens"></span>
-  <span class="doc-note">injected as context on every message</span>
-  <button class="doc-clear" onclick="clearDoc()">✕ Remove</button>
-</div>
+<!-- doc-bar removed -->
 
 <div id="chat">
   <div id="empty-state">
@@ -596,8 +589,6 @@ function loadSavedDoc() {
     docText = savedText;
     docFilename = savedName;
     showDocBar();
-    document.getElementById('load-doc-btn').classList.add('loaded');
-    document.getElementById('load-doc-btn').textContent = '📘 Guide Loaded';
   }
 }
 
@@ -784,8 +775,6 @@ async function handleDocUpload(event) {
     localStorage.setItem(DOC_TEXT_KEY, docText);
     localStorage.setItem(DOC_NAME_KEY, docFilename);
     showDocBar();
-    document.getElementById('load-doc-btn').classList.add('loaded');
-    document.getElementById('load-doc-btn').textContent = '📘 Guide Loaded';
   } catch (err) {
     docText = '';
     setStatus(`✗ ${err.message}`, 'error');
@@ -821,18 +810,22 @@ async function extractDocxText(file) {
 }
 function showDocBar() {
   const est = Math.round(docText.length / 4);
-  const estStr = est >= 1000 ? `~${(est/1000).toFixed(1)}K tokens` : `~${est} tokens`;
-  document.getElementById('doc-name').textContent = docFilename;
-  document.getElementById('doc-tokens').textContent = `(${estStr})`;
-  docBar.style.display = 'flex';
+  const estStr = est >= 1000 ? `~${(est/1000).toFixed(1)}K` : `~${est}`;
+  const btn = document.getElementById('load-doc-btn');
+  btn.classList.add('loaded');
+  btn.textContent = `📘 ${docFilename} (${estStr} tokens) ✕`;
+  btn.title = 'Click to remove guide';
+  btn.onclick = clearDoc;
 }
 function clearDoc() {
   docText = ''; docFilename = '';
   localStorage.removeItem(DOC_TEXT_KEY);
   localStorage.removeItem(DOC_NAME_KEY);
-  docBar.style.display = 'none';
-  document.getElementById('load-doc-btn').classList.remove('loaded');
-  document.getElementById('load-doc-btn').textContent = '📄 Load Guide';
+  const btn = document.getElementById('load-doc-btn');
+  btn.classList.remove('loaded');
+  btn.textContent = '📄 Load Guide';
+  btn.title = '';
+  btn.onclick = () => document.getElementById('doc-file-input').click();
   setStatus('Production guide removed.', '');
 }
 
@@ -899,6 +892,72 @@ function addTyping() {
 }
 function removeTyping() { const t = document.getElementById('typing-msg'); if (t) t.remove(); }
 
+// ── Token cost table (per 1M tokens, input / output) ──
+const MODEL_COSTS = {
+  'kimi-k2.5':                           { in: 0.14,  out: 0.14  },  // Moonshot direct, thinking off
+  'moonshotai/kimi-k2.5':                { in: 0.15,  out: 0.15  },  // via OpenRouter
+  'meta-llama/llama-3.3-70b-instruct':   { in: 0.06,  out: 0.12  },
+  'perplexity/sonar-pro-search':         { in: 3.0,   out: 15.0  },
+  'google/gemini-2.5-pro':               { in: 1.25,  out: 10.0  },
+  'anthropic/claude-sonnet-4-5':         { in: 3.0,   out: 15.0  },
+  // free models — not listed, cost defaults to 0
+};
+function _calcCost(model, promptTok, completionTok) {
+  const p = MODEL_COSTS[model];
+  if (!p || (!promptTok && !completionTok)) return null;
+  return (promptTok / 1_000_000 * p.in) + (completionTok / 1_000_000 * p.out);
+}
+
+// ── Post-message meta bar: tokens · cost · copy · save ──
+function addMessageMeta(bub, { promptTokens, completionTokens, model, content }) {
+  const bubWrap = bub.parentElement;
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+
+  const hasUsage = promptTokens > 0 || completionTokens > 0;
+  let tokenStr;
+  if (hasUsage) {
+    const cost = _calcCost(model, promptTokens, completionTokens);
+    const costStr = cost != null ? ` · ~$${cost < 0.0001 ? '<0.0001' : cost.toFixed(4)}` : ' · free';
+    tokenStr = `↑${promptTokens.toLocaleString()} ↓${completionTokens.toLocaleString()} tokens${costStr}`;
+  } else {
+    const est = Math.round((content || '').length / 4);
+    tokenStr = `~${est.toLocaleString()} tokens (est.)`;
+  }
+
+  const isLong = content && content.length > 600;
+  meta.innerHTML = `
+    <span class="msg-tokens">${tokenStr}</span>
+    <div class="msg-actions">
+      ${isLong ? `<button class="msg-btn save-btn" title="Save as .txt">💾 Save</button>` : ''}
+      <button class="msg-btn copy-btn" title="Copy to clipboard">📋 Copy</button>
+    </div>`;
+
+  // Store content directly on element (avoids re-querying the bubble)
+  const saveBtn = meta.querySelector('.save-btn');
+  const copyBtn = meta.querySelector('.copy-btn');
+  if (copyBtn) copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(content || bub.textContent || '').then(() => {
+      copyBtn.textContent = '✓ Copied';
+      copyBtn.classList.add('copied');
+      setTimeout(() => { copyBtn.textContent = '📋 Copy'; copyBtn.classList.remove('copied'); }, 2000);
+    });
+  });
+  if (saveBtn) saveBtn.addEventListener('click', () => {
+    const text = content || bub.textContent || '';
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+    a.download = `chia-${ts}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  bubWrap.appendChild(meta);
+}
+
 // ── Send message ──
 async function sendMessage() {
   const text = inputEl.value.trim();
@@ -960,6 +1019,7 @@ async function sendMessage() {
 
     let full = '';
     let bubble = null;
+    let usageData = null;  // captured from final streaming chunk
 
     if (provider === 'moonshot') {
       // Moonshot: multi-turn $web_search loop
@@ -998,6 +1058,7 @@ async function sendMessage() {
             if (rawData === '[DONE]') continue;
             try {
               const parsed = JSON.parse(rawData);
+              if (parsed.usage) usageData = parsed.usage;  // capture token usage
               const choice = parsed.choices?.[0];
               if (!choice) continue;
 
@@ -1083,6 +1144,7 @@ async function sendMessage() {
           if (rawData === '[DONE]') continue;
           try {
             const parsed = JSON.parse(rawData);
+            if (parsed.usage) usageData = parsed.usage;  // capture token usage
             const choice = parsed.choices?.[0];
             if (!choice) continue;
             if (choice.delta?.tool_calls) {
@@ -1111,13 +1173,19 @@ async function sendMessage() {
     if (full) {
       messages.push({ role: 'assistant', content: full });
       saveCurrentConversation();
+      // Add token/cost/copy/save meta bar
+      if (bubble) addMessageMeta(bubble, {
+        promptTokens:     usageData?.prompt_tokens     || 0,
+        completionTokens: usageData?.completion_tokens || 0,
+        model: selectedModel,
+        content: full
+      });
     } else {
       messages.pop(); // no real response — discard the user message we added
     }
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    const tokens  = Math.round((full || '').length / 4);
     const docNote = docText ? ' · 📘 guide active' : '';
-    setStatus(`✓ ${elapsed}s · ~${tokens} tokens${docNote}`, 'ok');
+    setStatus(`✓ ${elapsed}s${docNote}`, 'ok');
 
   } catch (err) {
     removeTyping();
