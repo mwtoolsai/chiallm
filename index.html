@@ -660,6 +660,11 @@ function useChip(el) {
 const HISTORY_KEY = 'chia_history';
 const MAX_HISTORY = 50;
 let currentConvId = null;
+
+// ── Active Script variables (declared here to avoid TDZ errors) ──
+const SCRIPT_STORAGE_KEY = 'chia_active_script';
+let activeScript = null; // { content, code, sceneCount }
+
 renderHistoryPanel(); // now safe — HISTORY_KEY is defined
 _loadScriptFromStorage(); // restore active Set C script from previous session
 
@@ -1089,9 +1094,6 @@ async function checkFreeModelStatuses() {
 
 // ── Active Script (Scene Editor) ──
 // Stores the full Set C script in localStorage for targeted scene edits
-const SCRIPT_STORAGE_KEY = 'chia_active_script';
-let activeScript = null; // { content, code, sceneCount }
-
 function _loadScriptFromStorage() {
   try {
     const raw = localStorage.getItem(SCRIPT_STORAGE_KEY);
@@ -1193,63 +1195,78 @@ function _detectSceneEditRequest(text) {
 
 // ── Set C ZIP packaging ──
 function _isSetCFormat(content) {
-  // Detect Set C output: must have at least 3 [SCENE N: IMAGE/VIDEO/TH: ...] markers
-  const matches = (content || '').match(/\[SCENE\s+\d+:\s*(IMAGE|VIDEO|TH):/gi);
+  // Detect Set C output: must have at least 3 [SCENE N: IMAGE/VIDEO/TALKINGHEAD: ...] markers
+  const matches = (content || '').match(/\[SCENE\s+\d+:\s*(IMAGE|VIDEO|TALKINGHEAD|TH):/gi);
   return matches && matches.length >= 3;
 }
 
 function _parseSetCScenes(content) {
-  const imagePrompts = [];
-  const videoPrompts = [];
-  // Match full [SCENE N: TYPE: prompt] lines — each is on one line
-  const re = /^\[SCENE\s+(\d+):\s*(IMAGE|VIDEO|TH):\s*(.+?)\].*$/im;
+  const imagePrompts     = [];
+  const videoPrompts     = [];
+  const talkingheadLines = [];
+
   for (const line of content.split('\n')) {
-    const m = line.match(/^\[SCENE\s+(\d+):\s*(IMAGE|VIDEO|TH):\s*(.+)\]\s*$/i);
+    // Match [SCENE N: TYPE: prompt] — greedy to last ] on the line
+    const m = line.match(/^\[SCENE\s+(\d+):\s*(IMAGE|VIDEO|TALKINGHEAD|TH):\s*(.+)\]\s*$/i);
     if (!m) continue;
-    const num = m[1], type = m[2].toUpperCase(), prompt = m[3].trim();
-    if (type === 'IMAGE') imagePrompts.push(`${num}. ${prompt}`);
-    else if (type === 'VIDEO') videoPrompts.push(`${num}. ${prompt}`);
+    const num  = m[1];
+    const type = m[2].toUpperCase();
+    let   raw  = m[3].trim();
+
+    if (type === 'IMAGE') {
+      // Strip Ken Burns effect suffix  (| ZOOM_IN, | PAN_RIGHT, etc.)
+      const prompt = raw.replace(/\s*\|\s*[A-Z_]+\s*$/, '').trim();
+      imagePrompts.push(`${num}. ${prompt}`);
+    } else if (type === 'VIDEO') {
+      videoPrompts.push(`${num}. ${raw}`);
+    } else if (type === 'TALKINGHEAD' || type === 'TH') {
+      // raw is already: The character says "..."
+      talkingheadLines.push(`${num}. ${raw}`);
+    }
   }
-  return { imagePrompts, videoPrompts };
+  return { imagePrompts, videoPrompts, talkingheadLines };
 }
 
 async function packageSetCZip(btn, content) {
-  const projectCode = prompt('Enter project code (e.g. FC80):', '');
+  const projectCode = prompt('Enter project code (e.g. AH351):', '');
   if (!projectCode) return;
 
   const code = projectCode.trim().toUpperCase();
-  const { imagePrompts, videoPrompts } = _parseSetCScenes(content);
+  const { imagePrompts, videoPrompts, talkingheadLines } = _parseSetCScenes(content);
 
-  // Strip preamble fluff (anything before the first SCENE line) from the scenes file
-  const scenesLines = content.split('\n');
-  const firstSceneIdx = scenesLines.findIndex(l => /^\s*(?:SCENE\s+\d+\b|\[SCENE\s+\d+\s*:)/i.test(l));
-  const cleanContent = firstSceneIdx > 0 ? scenesLines.slice(firstSceneIdx).join('\n') : content;
+  // Strip preamble fluff — everything before the first [SCENE N: line
+  const scenesLines  = content.split('\n');
+  const firstSceneIdx = scenesLines.findIndex(l => /^\[SCENE\s+\d+:/i.test(l.trim()));
+  const cleanContent  = firstSceneIdx > 0 ? scenesLines.slice(firstSceneIdx).join('\n') : content;
 
-  const zip = new JSZip();
+  const zip    = new JSZip();
   const folder = zip.folder(code);
 
-  // 1. Full scenes file (preamble stripped)
+  // 1. Master scenes file (clean — no preamble/phase headers)
   folder.file(`${code}-scenes.txt`, cleanContent);
 
-  // 2. Image prompts file
-  if (imagePrompts.length) {
+  // 2. Image prompts (no KB effects, just scene number + raw prompt)
+  if (imagePrompts.length)
     folder.file(`${code}_image_${imagePrompts.length}-scenes.txt`, imagePrompts.join('\n'));
-  }
 
-  // 3. Video prompts file
-  if (videoPrompts.length) {
+  // 3. Video prompts
+  if (videoPrompts.length)
     folder.file(`${code}_prompt_${videoPrompts.length}-scenes.txt`, videoPrompts.join('\n'));
-  }
+
+  // 4. Talkinghead prompts
+  if (talkingheadLines.length)
+    folder.file(`${code}_talkinghead_${talkingheadLines.length}-scenes.txt`, talkingheadLines.join('\n'));
 
   const blob = await zip.generateAsync({ type: 'blob' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
   a.href = url;
   a.download = `${code}.zip`;
   a.click();
   URL.revokeObjectURL(url);
 
-  btn.textContent = '✓ Downloaded';
+  const total = imagePrompts.length + videoPrompts.length + talkingheadLines.length;
+  btn.textContent = `✓ ${total} scenes`;
   btn.classList.add('copied');
   setTimeout(() => { btn.textContent = '📦 Set C ZIP'; btn.classList.remove('copied'); }, 3000);
 }
