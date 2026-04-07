@@ -526,6 +526,7 @@
         <div class="mdl-item active" data-value="deepseek/deepseek-v3.2" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-v3.2"></span><span class="mdl-name">DeepSeek V3.2 · 128K · ~$0.35/M</span></div>
         <div class="mdl-item" data-value="deepseek/deepseek-chat" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-chat"></span><span class="mdl-name">DeepSeek V3 · 64K · ~$0.27/M</span></div>
         <div class="mdl-item" data-value="minimax/minimax-m2.7" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="minimax/minimax-m2.7"></span><span class="mdl-name">MiniMax M2.7 · 1M ctx</span></div>
+        <div class="mdl-item" data-value="qwen/qwen3.5-plus-02-15" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="qwen/qwen3.5-plus-02-15"></span><span class="mdl-name">Qwen3.5 Plus · ~$0.26/M in</span></div>
         <div class="mdl-item" data-value="z-ai/glm-5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="z-ai/glm-5"></span><span class="mdl-name">GLM-5 · 745B · 128K · ~$0.72/M</span></div>
         <div class="mdl-item" data-value="z-ai/glm-5-turbo" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="z-ai/glm-5-turbo"></span><span class="mdl-name">GLM-5 Turbo · 128K</span></div>
         <div class="mdl-item" data-value="google/gemini-2.5-pro" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="google/gemini-2.5-pro"></span><span class="mdl-name">Gemini 2.5 Pro · 1M · ~$1.50/M</span></div>
@@ -957,6 +958,7 @@ const MODEL_COSTS = {
   'x-ai/grok-4.20':                      { in: 2.00,  out: 6.00  },  // Grok 4.20 via OpenRouter
   'xiaomi/mimo-v2-pro':                  { in: 0.30,  out: 0.90  },  // MiMo V2 Pro via OpenRouter
   'minimax/minimax-m2.7':               { in: 0.30,  out: 1.10  },  // MiniMax M2.7 via OpenRouter
+  'qwen/qwen3.5-plus-02-15':            { in: 0.26,  out: 1.56  },  // Qwen3.5 Plus via OpenRouter
   'anthropic/claude-sonnet-4-6':        { in: 3.00,  out: 15.0  },  // Claude Sonnet 4.6 via OpenRouter
   'anthropic/claude-opus-4-6':          { in: 15.0,  out: 75.0  },  // Claude Opus 4.6 via OpenRouter
   'deepseek/deepseek-chat':              { in: 0.27,  out: 1.10  },  // DeepSeek V3 via OpenRouter
