@@ -521,6 +521,7 @@
       </button>
       <div id="model-dropdown-panel">
         <div class="mdl-group">💳 OpenRouter Paid</div>
+        <div class="mdl-item" data-value="x-ai/grok-4.20" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="x-ai/grok-4.20"></span><span class="mdl-name">Grok 4.20 · 2M ctx · $2/$6 per M</span></div>
         <div class="mdl-item" data-value="xiaomi/mimo-v2-pro" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="xiaomi/mimo-v2-pro"></span><span class="mdl-name">⭐ MiMo V2 Pro · #1 OpenRouter</span></div>
         <div class="mdl-item active" data-value="deepseek/deepseek-v3.2" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-v3.2"></span><span class="mdl-name">DeepSeek V3.2 · 128K · ~$0.35/M</span></div>
         <div class="mdl-item" data-value="deepseek/deepseek-chat" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-chat"></span><span class="mdl-name">DeepSeek V3 · 64K · ~$0.27/M</span></div>
@@ -953,6 +954,7 @@ function removeTyping() { const t = document.getElementById('typing-msg'); if (t
 // ── Token cost table (per 1M tokens, input / output) ──
 const MODEL_COSTS = {
   'kimi-k2.5':                           { in: 0.14,  out: 0.14  },  // Moonshot direct, thinking off
+  'x-ai/grok-4.20':                      { in: 2.00,  out: 6.00  },  // Grok 4.20 via OpenRouter
   'xiaomi/mimo-v2-pro':                  { in: 0.30,  out: 0.90  },  // MiMo V2 Pro via OpenRouter
   'minimax/minimax-m2.7':               { in: 0.30,  out: 1.10  },  // MiniMax M2.7 via OpenRouter
   'anthropic/claude-sonnet-4-6':        { in: 3.00,  out: 15.0  },  // Claude Sonnet 4.6 via OpenRouter
