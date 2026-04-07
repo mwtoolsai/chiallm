@@ -266,10 +266,11 @@
   #empty-state h2 { font-size:17px; color:#777; font-weight:500; }
   #empty-state p { font-size:13px; max-width:400px; line-height:1.6; }
 
-  .suggestion-chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:8px; max-width:720px; }
+  .suggestion-chips { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; max-width:480px; }
   .chip {
     background:#1e1e1e; border:1px solid #2a2a2a; color:#aaa;
-    padding:6px 14px; border-radius:20px; font-size:12px; cursor:pointer; transition:all .15s;
+    padding:8px 14px; border-radius:10px; font-size:12px; cursor:pointer; transition:all .15s;
+    text-align:left;
   }
   .chip:hover { background:#2a2a2a; color:#e5e5e5; border-color:#6366f1; }
 
@@ -465,10 +466,10 @@
     <h2>Chia LLM</h2>
     <p>Powered by OpenRouter. Load your production guide, pick a model, and start writing.</p>
     <div class="suggestion-chips">
-      <div class="chip" onclick="useChip(this)">Write a YouTube hook about ancient DNA discoveries</div>
-      <div class="chip" onclick="useChip(this)">Script intro for a 25-min archaeology documentary</div>
-      <div class="chip" onclick="useChip(this)">Rewrite this section in dramatic documentary style:</div>
-      <div class="chip" onclick="useChip(this)">Give me 5 powerful hook ideas for a video about:</div>
+      <div class="chip" onclick="useChip(this)">Write a hook about ancient DNA</div>
+      <div class="chip" onclick="useChip(this)">Script a 25-min documentary intro</div>
+      <div class="chip" onclick="useChip(this)">Rewrite in dramatic style:</div>
+      <div class="chip" onclick="useChip(this)">5 hook ideas for a video about:</div>
     </div>
   </div>
 </div>
