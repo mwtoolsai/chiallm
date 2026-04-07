@@ -345,6 +345,11 @@
   }
   .msg-btn:hover { background: #252525; color: #ccc; border-color: #3a3a3a; }
   .msg-btn.copied { color: #10b981; border-color: #10b981; }
+  .cont-btn { border-color: #2a4a6a !important; color: #4a9eff !important; }
+  .cont-btn:hover { background: #0f2a40 !important; border-color: #4a9eff !important; color: #7bbfff !important; }
+  .cont-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .cont-pulse { animation: contPulse 1.4s ease-in-out infinite; border-color: #3b82f6 !important; color: #60a5fa !important; }
+  @keyframes contPulse { 0%,100%{ box-shadow:0 0 0 0 rgba(59,130,246,0) } 50%{ box-shadow:0 0 0 4px rgba(59,130,246,0.4) } }
   ::-webkit-scrollbar { width:6px; }
   ::-webkit-scrollbar-track { background:transparent; }
   ::-webkit-scrollbar-thumb { background:#333; border-radius:3px; }
@@ -990,6 +995,8 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
 
   const isLong = content && content.length > 600;
   const isSetC = _isSetCFormat(content);
+  // Detect when model asked for continuation (e.g. Kimi says "please say **continue**")
+  const contRequested = /please\s+say\s+\*{0,2}continue\*{0,2}|say\s+\*{0,2}continue\*{0,2}\s*(?:and|to)/i.test((content||'').slice(-1000));
   meta.innerHTML = `
     <span class="msg-tokens">${tokenStr}</span>
     <div class="msg-actions">
@@ -997,6 +1004,7 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
       ${isSetC  ? `<button class="msg-btn zip-btn"  title="Package as Set C ZIP">📦 Set C ZIP</button>` : ''}
       ${isLong  ? `<button class="msg-btn save-btn" title="Save as .txt">💾 Save</button>` : ''}
       <button class="msg-btn copy-btn" title="Copy to clipboard">📋 Copy</button>
+      ${isLong  ? `<button class="msg-btn cont-btn${contRequested ? ' cont-pulse' : ''}" title="Continue writing — appends to this response">▶ Continue</button>` : ''}
     </div>`;
 
   // Store content directly on element (avoids re-querying the bubble)
@@ -1024,6 +1032,8 @@ function addMessageMeta(bub, { promptTokens, completionTokens, model, content })
       setTimeout(() => { copyBtn.textContent = '📋 Copy'; copyBtn.classList.remove('copied'); }, 2000);
     });
   });
+  const contBtn = meta.querySelector('.cont-btn');
+  if (contBtn) contBtn.addEventListener('click', () => _continueResponse(bub, content || bub.textContent || '', meta));
   if (saveBtn) saveBtn.addEventListener('click', () => {
     const text = content || bub.textContent || '';
     const blob = new Blob([text], { type: 'text/plain' });
@@ -1191,6 +1201,110 @@ function _detectSceneEditRequest(text) {
   // Patterns: "scene 61", "fix scene 61", "scene 61 is missing...", etc.
   const m = text.match(/scene\s+(\d+)/i);
   return m ? parseInt(m[1]) : null;
+}
+
+// ── Continue an existing response (append seamlessly to current bubble) ──
+async function _continueResponse(bub, originalContent, metaEl) {
+  if (isLoading) { return; } // already streaming
+
+  const provider = document.querySelector(`.mdl-item[data-value="${selectedModel}"]`)?.dataset?.provider || 'openrouter';
+  const activeKey = provider === 'moonshot' ? moonshotKey : openrouterKey;
+  if (!activeKey) { document.getElementById('key-prompt').classList.add('show'); return; }
+
+  isLoading = true;
+  abortController = new AbortController();
+  sendBtn.textContent = '■';
+  sendBtn.classList.add('stopping');
+  sendBtn.disabled = false;
+  sendBtn.onclick = stopGeneration;
+  _userScrolledUp = false;
+
+  // Disable continue button while running
+  metaEl?.querySelectorAll('.cont-btn').forEach(b => { b.disabled = true; b.textContent = '⏳'; });
+
+  const sysPrompt = buildSystemPrompt();
+  const startTime = Date.now();
+
+  // Visual: append divider + loading indicator to existing bubble
+  const divNode = document.createTextNode('\n\n— continuing —\n\n');
+  const loadNode = document.createTextNode('⏳');
+  bub.appendChild(divNode);
+  bub.appendChild(loadNode);
+  _scheduleScroll();
+  setStatus(docText ? 'Continuing… (guide active)' : 'Continuing…', 'active');
+
+  try {
+    let apiUrl, headers;
+    if (provider === 'moonshot') {
+      apiUrl = 'https://api.moonshot.cn/v1/chat/completions';
+      headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${activeKey}` };
+    } else {
+      apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+      headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${activeKey}`, 'HTTP-Referer': location.href, 'X-Title': 'Chia LLM' };
+    }
+
+    // Full history + silent "continue" — no web search (just write)
+    const contMsgs = [
+      { role: 'system', content: sysPrompt },
+      ...messages,   // last item is { role:'assistant', content: originalContent }
+      { role: 'user', content: 'continue' }
+    ];
+    const contPayload = provider === 'moonshot'
+      ? { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true, thinking: { type: 'disabled' } }
+      : { model: selectedModel, messages: contMsgs, max_tokens: 32768, stream: true, stream_options: { include_usage: true } };
+
+    const resp = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(contPayload), signal: abortController?.signal });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', contDelta = '', contFinish = null, usageData = null, firstDelta = true;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') continue;
+        try {
+          const p = JSON.parse(raw);
+          if (p.usage) usageData = p.usage;
+          const ch = p.choices?.[0]; if (!ch) continue;
+          if (ch.finish_reason) contFinish = ch.finish_reason;
+          const d = ch.delta?.content || '';
+          if (d) {
+            if (firstDelta) { if (loadNode.parentNode) bub.removeChild(loadNode); firstDelta = false; }
+            contDelta += d;
+            _appendDelta(bub, d);
+          }
+        } catch {}
+      }
+    }
+    if (loadNode.parentNode) bub.removeChild(loadNode);
+
+    // Update messages: replace last assistant message with combined content
+    const combined = originalContent + '\n\n' + contDelta;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role === 'assistant') lastMsg.content = combined;
+    saveCurrentConversation();
+
+    // Rebuild meta bar with updated combined content
+    if (metaEl) metaEl.remove();
+    addMessageMeta(bub, { promptTokens: usageData?.prompt_tokens || 0, completionTokens: usageData?.completion_tokens || 0, model: selectedModel, content: combined });
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    setStatus(`✓ ${elapsed}s (continued)${docText ? ' · 📘 guide active' : ''}`, 'ok');
+
+  } catch (err) {
+    if (divNode.parentNode) bub.removeChild(divNode);
+    if (loadNode.parentNode) bub.removeChild(loadNode);
+    const restore = () => metaEl?.querySelectorAll('.cont-btn').forEach(b => { b.disabled = false; b.textContent = '▶ Continue'; });
+    if (err.name === 'AbortError') { restore(); setStatus('⏹ Stopped', ''); }
+    else { _appendDelta(bub, `\n\n[Error: ${err.message}]`); restore(); setStatus(`✗ ${err.message}`, 'error'); }
+  }
+  _resetSendBtn();
 }
 
 // ── Set C ZIP packaging ──
