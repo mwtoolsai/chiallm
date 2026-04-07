@@ -523,10 +523,10 @@
         <div class="mdl-group">💳 OpenRouter Paid</div>
         <div class="mdl-item" data-value="x-ai/grok-4.20" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="x-ai/grok-4.20"></span><span class="mdl-name">Grok 4.20 · 2M ctx · $2/$6 per M</span></div>
         <div class="mdl-item" data-value="xiaomi/mimo-v2-pro" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="xiaomi/mimo-v2-pro"></span><span class="mdl-name">⭐ MiMo V2 Pro · #1 OpenRouter</span></div>
-        <div class="mdl-item active" data-value="deepseek/deepseek-v3.2" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-v3.2"></span><span class="mdl-name">DeepSeek V3.2 · 128K · ~$0.35/M</span></div>
+        <div class="mdl-item" data-value="deepseek/deepseek-v3.2" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-v3.2"></span><span class="mdl-name">DeepSeek V3.2 · 128K · ~$0.35/M</span></div>
         <div class="mdl-item" data-value="deepseek/deepseek-chat" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-chat"></span><span class="mdl-name">DeepSeek V3 · 64K · ~$0.27/M</span></div>
         <div class="mdl-item" data-value="minimax/minimax-m2.7" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="minimax/minimax-m2.7"></span><span class="mdl-name">MiniMax M2.7 · 1M ctx</span></div>
-        <div class="mdl-item" data-value="qwen/qwen3.5-plus-02-15" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="qwen/qwen3.5-plus-02-15"></span><span class="mdl-name">Qwen3.5 Plus · ~$0.26/M in</span></div>
+        <div class="mdl-item active" data-value="qwen/qwen3.5-plus-02-15" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="qwen/qwen3.5-plus-02-15"></span><span class="mdl-name">Qwen3.5 Plus · ~$0.26/M in</span></div>
         <div class="mdl-item" data-value="z-ai/glm-5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="z-ai/glm-5"></span><span class="mdl-name">GLM-5 · 745B · 128K · ~$0.72/M</span></div>
         <div class="mdl-item" data-value="z-ai/glm-5-turbo" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="z-ai/glm-5-turbo"></span><span class="mdl-name">GLM-5 Turbo · 128K</span></div>
         <div class="mdl-item" data-value="google/gemini-2.5-pro" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="google/gemini-2.5-pro"></span><span class="mdl-name">Gemini 2.5 Pro · 1M · ~$1.50/M</span></div>
@@ -575,7 +575,7 @@ const statusEl   = document.getElementById('status');
 const docBar     = null; // doc-bar element removed — kept as null to avoid errors
 
 // ── Custom model dropdown state ──
-let selectedModel = 'deepseek/deepseek-v3.2';
+let selectedModel = 'qwen/qwen3.5-plus-02-15';
 const modelStatus = {}; // modelId → 'green' | 'red' | 'testing' | 'gray'
 const MODEL_LABELS = {};
 document.querySelectorAll('.mdl-item[data-value]').forEach(el => {
