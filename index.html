@@ -1320,6 +1320,7 @@ function _parseSetCScenes(content) {
   const imagePrompts     = [];
   const videoPrompts     = [];
   const talkingheadLines = [];
+  const seen = new Set(); // deduplicate by scene number — model sometimes lists scenes twice (master + extract)
 
   for (const line of content.split('\n')) {
     // Match [SCENE N: TYPE: prompt] — greedy to last ] on the line
@@ -1328,6 +1329,10 @@ function _parseSetCScenes(content) {
     const num  = m[1];
     const type = m[2].toUpperCase();
     let   raw  = m[3].trim();
+
+    const key = `${type}-${num}`;
+    if (seen.has(key)) continue; // skip duplicate
+    seen.add(key);
 
     if (type === 'IMAGE') {
       // Strip Ken Burns effect suffix  (| ZOOM_IN, | PAN_RIGHT, etc.)
@@ -1348,18 +1353,26 @@ async function packageSetCZip(btn, content) {
   if (!projectCode) return;
 
   const code = projectCode.trim().toUpperCase();
-  const { imagePrompts, videoPrompts, talkingheadLines } = _parseSetCScenes(content);
 
-  // Strip preamble fluff — everything before the first [SCENE N: line
-  const scenesLines  = content.split('\n');
-  const firstSceneIdx = scenesLines.findIndex(l => /^\[SCENE\s+\d+:/i.test(l.trim()));
-  const cleanContent  = firstSceneIdx > 0 ? scenesLines.slice(firstSceneIdx).join('\n') : content;
+  // If content has a "— continuing —" divider, use only the post-continuation section
+  // (the model rewrites the full clean master there — the pre-divider has mixed Pass1/Pass2)
+  const contDivider = content.indexOf('— continuing —');
+  const parseSource = contDivider > -1 ? content.slice(contDivider) : content;
+
+  const { imagePrompts, videoPrompts, talkingheadLines } = _parseSetCScenes(parseSource);
+
+  // Strip preamble fluff — everything before the first [SCENE N: line (with prompt, i.e. has colon after type)
+  const scenesLines   = parseSource.split('\n');
+  const firstSceneIdx = scenesLines.findIndex(l => /^\[SCENE\s+\d+:\s*(IMAGE|VIDEO|TALKINGHEAD|TH):/i.test(l.trim()));
+  const cleanContent  = firstSceneIdx > 0 ? scenesLines.slice(firstSceneIdx).join('\n') : parseSource;
+  // Remove markdown code fences if model wrapped the master in ```
+  const masterContent = cleanContent.replace(/^```[^\n]*\n?/gm, '').replace(/^```\s*$/gm, '').trim();
 
   const zip    = new JSZip();
   const folder = zip.folder(code);
 
-  // 1. Master scenes file (clean — no preamble/phase headers)
-  folder.file(`${code}-scenes.txt`, cleanContent);
+  // 1. Master scenes file (clean — no preamble/phase headers, no code fences)
+  folder.file(`${code}-scenes.txt`, masterContent);
 
   // 2. Image prompts (no KB effects, just scene number + raw prompt)
   if (imagePrompts.length)
