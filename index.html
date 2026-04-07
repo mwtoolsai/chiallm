@@ -1694,6 +1694,10 @@ async function sendMessage() {
       const orWebSearch = docText ? [] : [{ type: 'openrouter:web_search' }];
       // Estimate system prompt tokens (~4 chars/token) and set max_tokens based on model context.
       // Use model-specific context budgets — Qwen3.5 397B/Plus have 262K–1M ctx, DeepSeek 128K.
+      // Enable thinking permanently for Qwen3 models — always on
+      const isQwen3 = selectedModel.startsWith('qwen/qwen3');
+      // Estimate system prompt tokens (~4 chars/token) and set max_tokens based on model context.
+      // Use model-specific context budgets — Qwen3.5 397B/Plus have 262K–1M ctx, DeepSeek 128K.
       const MODEL_CTX = {
         'qwen/qwen3.5-397b-a17b':   { ctx: 200000, maxOut: 65536 },
         'qwen/qwen3.5-plus-02-15':  { ctx: 200000, maxOut: 65536 },
@@ -1704,8 +1708,6 @@ async function sendMessage() {
       // Reserve space for conversation history + thinking tokens (~8K buffer for Qwen thinking)
       const thinkingBuffer = isQwen3 ? 8000 : 0;
       const orMaxTokens = Math.min(ctxCfg.maxOut, Math.max(8192, ctxCfg.ctx - sysTokenEstimate - thinkingBuffer));
-      // Enable thinking permanently for Qwen3 models — always on
-      const isQwen3 = selectedModel.startsWith('qwen/qwen3');
       payload = {
         model: selectedModel,
         messages: [{ role: 'system', content: sysPrompt }, ...messages],
