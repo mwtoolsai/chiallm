@@ -530,7 +530,8 @@
         <div class="mdl-item" data-value="arcee-ai/trinity-large-preview:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="arcee-ai/trinity-large-preview:free"></span><span class="mdl-name">Arcee Trinity · 131K</span></div>
         <div class="mdl-item" data-value="stepfun/step-3.5-flash:free" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="stepfun/step-3.5-flash:free"></span><span class="mdl-name">StepFun 3.5 Flash · 256K</span></div>
         <div class="mdl-group" style="margin-top:4px">💳 OpenRouter Paid · web search</div>
-        <div class="mdl-item" data-value="deepseek/deepseek-chat" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-chat"></span><span class="mdl-name">⭐ DeepSeek V3 · 64K · ~$0.27/M</span></div>
+        <div class="mdl-item" data-value="deepseek/deepseek-v3.2" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-v3.2"></span><span class="mdl-name">⭐ DeepSeek V3.2 · 128K · ~$0.35/M</span></div>
+        <div class="mdl-item" data-value="deepseek/deepseek-chat" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="deepseek/deepseek-chat"></span><span class="mdl-name">DeepSeek V3 · 64K · ~$0.27/M</span></div>
         <div class="mdl-item" data-value="moonshotai/kimi-k2.5" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="moonshotai/kimi-k2.5"></span><span class="mdl-name">Kimi K2.5 · 262K · ~$0.25</span></div>
         <div class="mdl-item" data-value="meta-llama/llama-3.3-70b-instruct" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="meta-llama/llama-3.3-70b-instruct"></span><span class="mdl-name">Llama 3.3 70B · 128K · ~$0.30</span></div>
         <div class="mdl-item" data-value="perplexity/sonar-pro-search" data-provider="openrouter" onclick="pickModel(this)"><span class="mdl-dot gray" data-dot="perplexity/sonar-pro-search"></span><span class="mdl-name">Perplexity Sonar Pro · 200K</span></div>
@@ -958,6 +959,7 @@ function removeTyping() { const t = document.getElementById('typing-msg'); if (t
 const MODEL_COSTS = {
   'kimi-k2.5':                           { in: 0.14,  out: 0.14  },  // Moonshot direct, thinking off
   'deepseek/deepseek-chat':              { in: 0.27,  out: 1.10  },  // DeepSeek V3 via OpenRouter
+  'deepseek/deepseek-v3.2':             { in: 0.35,  out: 0.88  },  // DeepSeek V3.2 via OpenRouter
   'moonshotai/kimi-k2.5':                { in: 0.15,  out: 0.15  },  // via OpenRouter
   'meta-llama/llama-3.3-70b-instruct':   { in: 0.06,  out: 0.12  },
   'perplexity/sonar-pro-search':         { in: 3.0,   out: 15.0  },
@@ -1674,10 +1676,14 @@ async function sendMessage() {
       // Only enable web search when no production guide is loaded.
       // When guide is active, model must write — web search causes loops/500s on some models.
       const orWebSearch = docText ? [] : [{ type: 'openrouter:web_search' }];
+      // Estimate system prompt tokens (~4 chars/token) to avoid exceeding model context window.
+      // DeepSeek V3 = 64K ctx. Our guide alone = ~37.5K tokens, so cap output at 16K.
+      const sysTokenEstimate = Math.ceil(sysPrompt.length / 4);
+      const orMaxTokens = Math.min(32768, Math.max(8192, 60000 - sysTokenEstimate));
       payload = {
         model: selectedModel,
         messages: [{ role: 'system', content: sysPrompt }, ...messages],
-        max_tokens: 32768,
+        max_tokens: orMaxTokens,
         stream: true,
         stream_options: { include_usage: true },
         temperature: 0.7,
